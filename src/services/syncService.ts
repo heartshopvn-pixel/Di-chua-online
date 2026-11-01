@@ -40,8 +40,14 @@ class LiveSyncService {
     this.initServerRelay();
   }
 
+  private isStaticHost(): boolean {
+    if (typeof window === 'undefined') return false;
+    const host = window.location.hostname;
+    return host.endsWith('github.io') || host.endsWith('pages.dev') || host.endsWith('vercel.app') || host.endsWith('netlify.app');
+  }
+
   private initServerRelay() {
-    if (typeof window === 'undefined' || !('EventSource' in window)) return;
+    if (typeof window === 'undefined' || !('EventSource' in window) || this.isStaticHost()) return;
     const params = new URLSearchParams(window.location.search);
     const isObs = params.get('obs') === '1' || params.get('view') === 'live';
     const role = isObs ? 'obs' : 'admin';
@@ -65,6 +71,10 @@ class LiveSyncService {
         } catch {
           // Ignore malformed event
         }
+      };
+
+      es.onerror = () => {
+        es.close();
       };
     } catch {
       // Ignore SSE error if offline
@@ -132,13 +142,15 @@ class LiveSyncService {
     }
 
     // 2. Cloud/Server Relay to OBS Browser Source or separate browser windows
-    fetch('/api/sync-command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ senderId: this.clientId, packet }),
-    }).catch(() => {
-      // Ignore if static host
-    });
+    if (!this.isStaticHost()) {
+      fetch('/api/sync-command', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ senderId: this.clientId, packet }),
+      }).catch(() => {
+        // Ignore if static host
+      });
+    }
 
     // 3. Optional local Node.js WebSocket bridge
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
