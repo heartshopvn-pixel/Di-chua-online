@@ -24,6 +24,13 @@ import {
 interface TabAudioProps {
   config: GameConfig;
   ttsStatus: { text: string; active: boolean };
+  eventTtsQueue?: {
+    waitingCount: number;
+    isPlayingEvent: boolean;
+    currentEventText: string | null;
+    queueItems: string[];
+  };
+  onClearEventTtsQueue?: () => void;
   onUpdateConfig: (patch: Partial<GameConfig>) => void;
   onPlayBell: () => void;
   onPlayWoodenFish: () => void;
@@ -35,6 +42,8 @@ interface TabAudioProps {
 export const TabAudio: React.FC<TabAudioProps> = ({
   config,
   ttsStatus,
+  eventTtsQueue,
+  onClearEventTtsQueue,
   onUpdateConfig,
   onPlayBell,
   onPlayWoodenFish,
@@ -68,19 +77,24 @@ export const TabAudio: React.FC<TabAudioProps> = ({
     bgmTracks.find((t) => t.id === config.activeBgmTrackId) || bgmTracks[0];
 
   const handleUploadBgmMp3 = (file: File) => {
-    const url = URL.createObjectURL(file);
     const cleanName = file.name.replace(/\.[^/.]+$/, '');
-    const newTrack: BgmTrackItem = {
-      id: `bgm-custom-${Date.now()}`,
-      title: cleanName || 'Nhạc Thiền MP3 Mới',
-      url,
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const newTrack: BgmTrackItem = {
+          id: `bgm-custom-${Date.now()}`,
+          title: cleanName || 'Nhạc Thiền MP3 Mới',
+          url: reader.result,
+        };
+        const nextTracks = [...bgmTracks, newTrack];
+        onUpdateConfig({
+          bgmTracks: nextTracks,
+          activeBgmTrackId: newTrack.id,
+          bgmEnabled: true,
+        });
+      }
     };
-    const nextTracks = [...bgmTracks, newTrack];
-    onUpdateConfig({
-      bgmTracks: nextTracks,
-      activeBgmTrackId: newTrack.id,
-      bgmEnabled: true,
-    });
+    reader.readAsDataURL(file);
   };
 
   const handleRenameActiveBgm = (newTitle: string) => {
@@ -138,9 +152,134 @@ export const TabAudio: React.FC<TabAudioProps> = ({
   };
 
   const isAutoNext = config.dharmaAutoNext ?? true;
+  const waitingCount = eventTtsQueue?.waitingCount ?? 0;
+  const isPlayingEvent = eventTtsQueue?.isPlayingEvent ?? false;
+  const currentEventText = eventTtsQueue?.currentEventText ?? null;
+  const queueItems = eventTtsQueue?.queueItems ?? [];
 
   return (
     <div className="space-y-3.5">
+      {/* Thẻ Show Số Âm Thanh Sự Kiện Đang Chờ Được Đọc (Trừ Nhạc Nền, Kể Chuyện, Mõ & Chuông) */}
+      <section className="p-3 rounded-2xl bg-gradient-to-r from-amber-950/50 via-stone-900 to-stone-950 border border-amber-500/40 shadow-lg space-y-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-1.5">
+              <MessageSquareQuote className="w-4 h-4 text-amber-400 shrink-0" />
+              <h2 className="text-xs font-extrabold text-amber-300 uppercase tracking-wide">
+                Hàng Chờ Âm Thanh Sự Kiện Đang Chờ Đọc
+              </h2>
+            </div>
+            <p className="text-[10px] text-stone-400 mt-0.5 leading-snug">
+              Chỉ đếm âm thanh đọc sự kiện (Chào mừng, Dâng lễ, Cầu nguyện) —{' '}
+              <span className="text-amber-200/90 font-semibold">
+                Đã trừ Nhạc nền, Chế độ kể chuyện, Tiếng mõ & Tiếng chuông
+              </span>
+            </p>
+          </div>
+
+          {waitingCount > 0 && onClearEventTtsQueue && (
+            <button
+              type="button"
+              onClick={onClearEventTtsQueue}
+              className="px-2.5 py-1 rounded-lg bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-[10px] font-bold text-rose-200 flex items-center gap-1 shrink-0 cursor-pointer"
+              title="Xóa toàn bộ các câu sự kiện đang xếp hàng chờ đọc"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Xóa hàng chờ ({waitingCount})</span>
+            </button>
+          )}
+        </div>
+
+        {/* Bộ đếm trực quan */}
+        <div className="grid grid-cols-3 gap-2">
+          <div className="p-2 rounded-xl bg-stone-950/90 border border-amber-500/30 flex flex-col items-center justify-center text-center">
+            <span className="text-[9.5px] uppercase tracking-wider text-stone-400 font-semibold">
+              Đang chờ đọc
+            </span>
+            <span
+              className={`text-xl font-black mt-0.5 ${
+                waitingCount > 0 ? 'text-amber-300' : 'text-stone-400'
+              }`}
+            >
+              {waitingCount}
+            </span>
+            <span className="text-[9px] text-stone-500">âm thanh trong hàng</span>
+          </div>
+
+          <div className="p-2 rounded-xl bg-stone-950/90 border border-emerald-500/30 flex flex-col items-center justify-center text-center">
+            <span className="text-[9.5px] uppercase tracking-wider text-stone-400 font-semibold">
+              Đang phát sự kiện
+            </span>
+            <span
+              className={`text-xl font-black mt-0.5 ${
+                isPlayingEvent ? 'text-emerald-400' : 'text-stone-400'
+              }`}
+            >
+              {isPlayingEvent ? 1 : 0}
+            </span>
+            <span className="text-[9px] text-stone-500">
+              {isPlayingEvent ? 'đang đọc phát ra loa' : 'đang rảnh'}
+            </span>
+          </div>
+
+          <div className="p-2 rounded-xl bg-stone-950/90 border border-sky-500/30 flex flex-col items-center justify-center text-center">
+            <span className="text-[9.5px] uppercase tracking-wider text-stone-400 font-semibold">
+              Tổng cộng sự kiện
+            </span>
+            <span
+              className={`text-xl font-black mt-0.5 ${
+                waitingCount + (isPlayingEvent ? 1 : 0) > 0
+                  ? 'text-sky-300'
+                  : 'text-stone-400'
+              }`}
+            >
+              {waitingCount + (isPlayingEvent ? 1 : 0)}
+            </span>
+            <span className="text-[9px] text-stone-500">đang đọc + chờ</span>
+          </div>
+        </div>
+
+        {/* Chi tiết câu đang đọc & danh sách chờ */}
+        {(isPlayingEvent || waitingCount > 0) && (
+          <div className="p-2 rounded-xl bg-stone-950/80 border border-stone-800 space-y-1.5">
+            {isPlayingEvent && currentEventText && (
+              <div className="flex items-start gap-1.5 text-[10.5px]">
+                <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-[9.5px] shrink-0">
+                  ĐANG ĐỌC
+                </span>
+                <span className="text-emerald-200 line-clamp-2">
+                  “{currentEventText}”
+                </span>
+              </div>
+            )}
+
+            {queueItems.length > 0 && (
+              <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
+                <div className="text-[9.5px] font-bold text-amber-300/90 uppercase">
+                  Danh sách {queueItems.length} âm thanh đang xếp hàng chờ tới lượt:
+                </div>
+                {queueItems.slice(0, 8).map((item, idx) => (
+                  <div
+                    key={`${idx}-${item.slice(0, 16)}`}
+                    className="text-[10px] text-stone-300 bg-stone-900/90 border border-stone-800/80 rounded px-2 py-1 truncate"
+                  >
+                    <span className="text-amber-400 font-bold mr-1">
+                      #{idx + 1}:
+                    </span>
+                    {item}
+                  </div>
+                ))}
+                {queueItems.length > 8 && (
+                  <div className="text-[9.5px] text-stone-500 italic pl-1">
+                    ... và còn {queueItems.length - 8} âm thanh sự kiện khác đang chờ.
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+
       {/* Thẻ Gộp Trung Tâm Âm Thanh, Thuyết Pháp & Đọc Sự Kiện */}
       <section className="p-3.5 rounded-2xl bg-gradient-to-b from-stone-900/95 to-stone-950 border border-amber-500/40 shadow-xl space-y-3.5">
         {/* Header của thẻ gộp */}
@@ -305,11 +444,18 @@ export const TabAudio: React.FC<TabAudioProps> = ({
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       if (f) {
-                        onUpdateConfig({
-                          bellMp3Url: URL.createObjectURL(f),
-                          bellMp3Title: f.name,
-                        });
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          if (typeof reader.result === 'string') {
+                            onUpdateConfig({
+                              bellMp3Url: reader.result,
+                              bellMp3Title: f.name,
+                            });
+                          }
+                        };
+                        reader.readAsDataURL(f);
                       }
+                      e.target.value = '';
                     }}
                   />
                 </label>
@@ -411,11 +557,18 @@ export const TabAudio: React.FC<TabAudioProps> = ({
                     onChange={(e) => {
                       const f = e.target.files?.[0];
                       if (f) {
-                        onUpdateConfig({
-                          woodenFishMp3Url: URL.createObjectURL(f),
-                          woodenFishMp3Title: f.name,
-                        });
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          if (typeof reader.result === 'string') {
+                            onUpdateConfig({
+                              woodenFishMp3Url: reader.result,
+                              woodenFishMp3Title: f.name,
+                            });
+                          }
+                        };
+                        reader.readAsDataURL(f);
                       }
+                      e.target.value = '';
                     }}
                   />
                 </label>
@@ -633,166 +786,333 @@ export const TabAudio: React.FC<TabAudioProps> = ({
           />
         </div>
 
-        {/* 4. CHẾ ĐỘ ĐỌC SỰ KIỆN "NGƯỜI THẬT" (3 MỤC BẬT/TẮT + THIẾT LẬP NỘI DUNG) */}
-        <div className="p-2.5 rounded-xl bg-stone-900/90 border border-emerald-500/35 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-300">
-              Chế độ đọc sự kiện "Người thật"
-            </span>
-            <span className="text-[10px] text-stone-400 font-mono">
-              Biến hỗ trợ: [Tên], [Comment]
-            </span>
-          </div>
-
-          {/* 4.1 Chào mừng người mới */}
-          <div className="space-y-1">
-            <label className="flex items-center justify-between text-[11px] text-stone-200 cursor-pointer">
-              <span>1. Đọc lời chào mừng người mới vào chánh điện</span>
-              <input
-                type="checkbox"
-                checked={config.realWelcomeTtsEnabled}
-                onChange={(e) =>
-                  onUpdateConfig({ realWelcomeTtsEnabled: e.target.checked })
-                }
-                className="accent-emerald-500 w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </label>
-            <input
-              type="text"
-              value={config.realWelcomeTtsTemplate}
-              onChange={(e) =>
-                onUpdateConfig({ realWelcomeTtsTemplate: e.target.value })
-              }
-              className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-stone-200 focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-
-          {/* 4.2 Lời chúc người gửi quà */}
-          <div className="space-y-1">
-            <label className="flex items-center justify-between text-[11px] text-amber-200 font-semibold cursor-pointer">
-              <span>2. Đọc lời chúc cho người gửi quà (Dâng lễ)</span>
-              <input
-                type="checkbox"
-                checked={config.realGiftTtsEnabled}
-                onChange={(e) =>
-                  onUpdateConfig({ realGiftTtsEnabled: e.target.checked })
-                }
-                className="accent-amber-500 w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </label>
-            <input
-              type="text"
-              value={config.realGiftTtsTemplate}
-              onChange={(e) =>
-                onUpdateConfig({ realGiftTtsTemplate: e.target.value })
-              }
-              className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-amber-200 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-
-          {/* 4.3 Đọc lời cầu nguyện */}
-          <div className="space-y-1">
-            <label className="flex items-center justify-between text-[11px] text-stone-200 cursor-pointer">
-              <span>3. Đọc lời cầu nguyện (Bình luận)</span>
-              <input
-                type="checkbox"
-                checked={config.realPrayerTtsEnabled}
-                onChange={(e) =>
-                  onUpdateConfig({ realPrayerTtsEnabled: e.target.checked })
-                }
-                className="accent-emerald-500 w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </label>
-            <input
-              type="text"
-              value={config.realPrayerTtsTemplate}
-              onChange={(e) =>
-                onUpdateConfig({ realPrayerTtsTemplate: e.target.value })
-              }
-              className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-stone-200 focus:outline-none focus:border-emerald-500"
-            />
-          </div>
-        </div>
-
-        {/* 5. CHẾ ĐỘ ĐỌC SỰ KIỆN "NPC" (TƯƠNG TỰ 3 MỤC BẬT/TẮT GIỐNG NGƯỜI THẬT) */}
-        <div className="p-2.5 rounded-xl bg-stone-900/90 border border-cyan-500/30 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-cyan-300">
-              Chế độ đọc sự kiện "NPC"
-            </span>
-            <span className="text-[10px] text-stone-400 font-mono">
-              Biến hỗ trợ: [Tên], [Comment]
+        {/* 4. CHẾ ĐỘ ĐỌC SỰ KIỆN GỘP CHUNG (NGƯỜI THẬT & NPC DÙNG CHUNG MẪU CÂU NGẪU NHIÊN CHO MỤC 1, 2, 3) */}
+        <div className="p-3 rounded-xl bg-stone-900/90 border border-emerald-500/40 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-xs font-bold text-emerald-300 block">
+                Chế độ Đọc Sự Kiện (Gộp chung Người thật & NPC)
+              </span>
+              <span className="text-[10.5px] text-stone-400">
+                Tích chọn đọc cho Người thật, NPC hoặc cả 2 · Mỗi mục thêm được nhiều mẫu câu để hệ thống trích ngẫu nhiên khi đọc
+              </span>
+            </div>
+            <span className="text-[10px] text-amber-300 font-mono shrink-0 bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
+              Biến: [Tên], [Comment]
             </span>
           </div>
 
-          {/* 5.1 Chào mừng NPC mới */}
-          <div className="space-y-1">
-            <label className="flex items-center justify-between text-[11px] text-stone-200 cursor-pointer">
-              <span>1. Đọc lời chào mừng NPC mới vào chánh điện</span>
-              <input
-                type="checkbox"
-                checked={config.npcWelcomeTtsEnabled}
-                onChange={(e) =>
-                  onUpdateConfig({ npcWelcomeTtsEnabled: e.target.checked })
-                }
-                className="accent-cyan-400 w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </label>
-            <input
-              type="text"
-              value={config.npcWelcomeTtsTemplate}
-              onChange={(e) =>
-                onUpdateConfig({ npcWelcomeTtsTemplate: e.target.value })
-              }
-              className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-stone-300 focus:outline-none focus:border-cyan-400"
-            />
-          </div>
+          {/* MỤC 1: Đọc lời chào mừng mới vào chánh điện */}
+          {(() => {
+            const list1 =
+              Array.isArray(config.welcomeTtsTemplates) &&
+              config.welcomeTtsTemplates.length > 0
+                ? config.welcomeTtsTemplates
+                : [config.realWelcomeTtsTemplate || 'Chào mừng [Tên] đến kim thiền tự'];
+            return (
+              <div className="p-2.5 rounded-lg bg-stone-950/90 border border-stone-800 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-emerald-200">
+                    1. Đọc lời chào mừng mới vào chánh điện ({list1.length} mẫu)
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-emerald-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.realWelcomeTtsEnabled}
+                        onChange={(e) =>
+                          onUpdateConfig({ realWelcomeTtsEnabled: e.target.checked })
+                        }
+                        className="accent-emerald-500 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span>Người thật</span>
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-cyan-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.npcWelcomeTtsEnabled}
+                        onChange={(e) =>
+                          onUpdateConfig({ npcWelcomeTtsEnabled: e.target.checked })
+                        }
+                        className="accent-cyan-400 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span>NPC</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [
+                          ...list1,
+                          'Hoan hỷ chào đón Phật tử [Tên] về chùa cầu an',
+                        ];
+                        onUpdateConfig({
+                          welcomeTtsTemplates: next,
+                          realWelcomeTtsTemplate: next[0],
+                          npcWelcomeTtsTemplate: next[0],
+                        });
+                      }}
+                      className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-[10px] font-bold text-emerald-200 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Thêm mẫu</span>
+                    </button>
+                  </div>
+                </div>
 
-          {/* 5.2 Lời chúc NPC gửi quà */}
-          <div className="space-y-1">
-            <label className="flex items-center justify-between text-[11px] text-stone-200 cursor-pointer">
-              <span>2. Đọc lời chúc cho NPC gửi quà</span>
-              <input
-                type="checkbox"
-                checked={config.npcGiftTtsEnabled}
-                onChange={(e) =>
-                  onUpdateConfig({ npcGiftTtsEnabled: e.target.checked })
-                }
-                className="accent-cyan-400 w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </label>
-            <input
-              type="text"
-              value={config.npcGiftTtsTemplate}
-              onChange={(e) =>
-                onUpdateConfig({ npcGiftTtsTemplate: e.target.value })
-              }
-              className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-stone-300 focus:outline-none focus:border-cyan-400"
-            />
-          </div>
+                <div className="space-y-1.5">
+                  {list1.map((tpl, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-stone-500 w-5 text-right shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={tpl}
+                        onChange={(e) => {
+                          const next = list1.map((item, i) =>
+                            i === idx ? e.target.value : item
+                          );
+                          onUpdateConfig({
+                            welcomeTtsTemplates: next,
+                            realWelcomeTtsTemplate: next[0] || '',
+                            npcWelcomeTtsTemplate: next[0] || '',
+                          });
+                        }}
+                        placeholder="Mẫu câu chào mừng (dùng [Tên])..."
+                        className="flex-1 px-2 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] text-stone-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      {list1.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = list1.filter((_, i) => i !== idx);
+                            onUpdateConfig({
+                              welcomeTtsTemplates: next,
+                              realWelcomeTtsTemplate: next[0] || '',
+                              npcWelcomeTtsTemplate: next[0] || '',
+                            });
+                          }}
+                          title="Xóa mẫu câu này"
+                          className="p-1 rounded bg-stone-900 hover:bg-rose-950 text-stone-400 hover:text-rose-300 cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
-          {/* 5.3 Đọc lời cầu nguyện của NPC */}
-          <div className="space-y-1">
-            <label className="flex items-center justify-between text-[11px] text-stone-200 cursor-pointer">
-              <span>3. Đọc lời cầu nguyện của NPC</span>
-              <input
-                type="checkbox"
-                checked={config.npcPrayerTtsEnabled}
-                onChange={(e) =>
-                  onUpdateConfig({ npcPrayerTtsEnabled: e.target.checked })
-                }
-                className="accent-cyan-400 w-3.5 h-3.5 rounded cursor-pointer"
-              />
-            </label>
-            <input
-              type="text"
-              value={config.npcPrayerTtsTemplate}
-              onChange={(e) =>
-                onUpdateConfig({ npcPrayerTtsTemplate: e.target.value })
-              }
-              className="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-stone-300 focus:outline-none focus:border-cyan-400"
-            />
-          </div>
+          {/* MỤC 2: Đọc lời chúc cho người gửi quà (Dâng lễ) */}
+          {(() => {
+            const list2 =
+              Array.isArray(config.giftTtsTemplates) &&
+              config.giftTtsTemplates.length > 0
+                ? config.giftTtsTemplates
+                : [
+                    config.realGiftTtsTemplate ||
+                      'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe',
+                  ];
+            return (
+              <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-500/30 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-amber-200">
+                    2. Đọc lời chúc khi gửi quà / Dâng lễ ({list2.length} mẫu)
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-emerald-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.realGiftTtsEnabled}
+                        onChange={(e) =>
+                          onUpdateConfig({ realGiftTtsEnabled: e.target.checked })
+                        }
+                        className="accent-emerald-500 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span>Người thật</span>
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-cyan-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.npcGiftTtsEnabled}
+                        onChange={(e) =>
+                          onUpdateConfig({ npcGiftTtsEnabled: e.target.checked })
+                        }
+                        className="accent-cyan-400 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span>NPC</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [
+                          ...list2,
+                          'Tán thán công đức thí chủ [Tên], chúc bạn vạn sự hanh thông cát tường',
+                        ];
+                        onUpdateConfig({
+                          giftTtsTemplates: next,
+                          realGiftTtsTemplate: next[0],
+                          npcGiftTtsTemplate: next[0],
+                        });
+                      }}
+                      className="px-2 py-0.5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/40 text-[10px] font-bold text-amber-200 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Thêm mẫu</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  {list2.map((tpl, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-stone-500 w-5 text-right shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={tpl}
+                        onChange={(e) => {
+                          const next = list2.map((item, i) =>
+                            i === idx ? e.target.value : item
+                          );
+                          onUpdateConfig({
+                            giftTtsTemplates: next,
+                            realGiftTtsTemplate: next[0] || '',
+                            npcGiftTtsTemplate: next[0] || '',
+                          });
+                        }}
+                        placeholder="Mẫu câu chúc khi gửi quà (dùng [Tên])..."
+                        className="flex-1 px-2 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] text-amber-200 focus:outline-none focus:border-amber-500"
+                      />
+                      {list2.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = list2.filter((_, i) => i !== idx);
+                            onUpdateConfig({
+                              giftTtsTemplates: next,
+                              realGiftTtsTemplate: next[0] || '',
+                              npcGiftTtsTemplate: next[0] || '',
+                            });
+                          }}
+                          title="Xóa mẫu câu này"
+                          className="p-1 rounded bg-stone-900 hover:bg-rose-950 text-stone-400 hover:text-rose-300 cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* MỤC 3: Đọc lời cầu nguyện (Bình luận) */}
+          {(() => {
+            const list3 =
+              Array.isArray(config.prayerTtsTemplates) &&
+              config.prayerTtsTemplates.length > 0
+                ? config.prayerTtsTemplates
+                : [config.realPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'];
+            return (
+              <div className="p-2.5 rounded-lg bg-stone-950/90 border border-stone-800 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] font-bold text-stone-200">
+                    3. Đọc lời cầu nguyện / Bình luận ({list3.length} mẫu)
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-emerald-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.realPrayerTtsEnabled}
+                        onChange={(e) =>
+                          onUpdateConfig({ realPrayerTtsEnabled: e.target.checked })
+                        }
+                        className="accent-emerald-500 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span>Người thật</span>
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] font-semibold text-cyan-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={config.npcPrayerTtsEnabled}
+                        onChange={(e) =>
+                          onUpdateConfig({ npcPrayerTtsEnabled: e.target.checked })
+                        }
+                        className="accent-cyan-400 w-3.5 h-3.5 rounded cursor-pointer"
+                      />
+                      <span>NPC</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = [
+                          ...list3,
+                          'Phật tử [Tên] thành tâm ước nguyện: [Comment]',
+                        ];
+                        onUpdateConfig({
+                          prayerTtsTemplates: next,
+                          realPrayerTtsTemplate: next[0],
+                          npcPrayerTtsTemplate: next[0],
+                        });
+                      }}
+                      className="px-2 py-0.5 rounded bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-[10px] font-bold text-emerald-200 flex items-center gap-1 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Thêm mẫu</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  {list3.map((tpl, idx) => (
+                    <div key={idx} className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-mono text-stone-500 w-5 text-right shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <input
+                        type="text"
+                        value={tpl}
+                        onChange={(e) => {
+                          const next = list3.map((item, i) =>
+                            i === idx ? e.target.value : item
+                          );
+                          onUpdateConfig({
+                            prayerTtsTemplates: next,
+                            realPrayerTtsTemplate: next[0] || '',
+                            npcPrayerTtsTemplate: next[0] || '',
+                          });
+                        }}
+                        placeholder="Mẫu câu cầu nguyện (dùng [Tên], [Comment])..."
+                        className="flex-1 px-2 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] text-stone-200 focus:outline-none focus:border-emerald-500"
+                      />
+                      {list3.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = list3.filter((_, i) => i !== idx);
+                            onUpdateConfig({
+                              prayerTtsTemplates: next,
+                              realPrayerTtsTemplate: next[0] || '',
+                              npcPrayerTtsTemplate: next[0] || '',
+                            });
+                          }}
+                          title="Xóa mẫu câu này"
+                          className="p-1 rounded bg-stone-900 hover:bg-rose-950 text-stone-400 hover:text-rose-300 cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 6. CẤU HÌNH GIỌNG ĐỌC (ENGINE + TỐC ĐỘ / CAO ĐỘ / ÂM LƯỢNG) */}

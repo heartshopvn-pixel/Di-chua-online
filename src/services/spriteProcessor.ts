@@ -11,57 +11,77 @@ const pendingPromises = new Map<string, Promise<string[]>>();
  */
 const BAKED_STATIC_FRAMES: Record<string, string[]> = {
   // Khách Nữ (10 frames: 0..9)
+  './assets/aistudio/baked/pilgrim_female_strip.png': Array.from(
+    { length: 10 },
+    (_, i) => `./assets/aistudio/baked/pilgrim_female_f${i}.png`
+  ),
   '/assets/aistudio/baked/pilgrim_female_strip.png': Array.from(
     { length: 10 },
-    (_, i) => `/assets/aistudio/baked/pilgrim_female_f${i}.png`
+    (_, i) => `./assets/aistudio/baked/pilgrim_female_f${i}.png`
   ),
   '/assets/aistudio/Sprite_sheet_nh_n_v_t_n__-_ng__i_v_o_ch_a_6dcec4d1.png':
     Array.from(
       { length: 10 },
-      (_, i) => `/assets/aistudio/baked/pilgrim_female_f${i}.png`
+      (_, i) => `./assets/aistudio/baked/pilgrim_female_f${i}.png`
     ),
 
   // Khách Nam (10 frames: 0..9)
+  './assets/aistudio/baked/pilgrim_male_strip.png': Array.from(
+    { length: 10 },
+    (_, i) => `./assets/aistudio/baked/pilgrim_male_f${i}.png`
+  ),
   '/assets/aistudio/baked/pilgrim_male_strip.png': Array.from(
     { length: 10 },
-    (_, i) => `/assets/aistudio/baked/pilgrim_male_f${i}.png`
+    (_, i) => `./assets/aistudio/baked/pilgrim_male_f${i}.png`
   ),
   '/assets/aistudio/Sprite_sheet_nh_n_v_t_nam_-_ng__i_v_o_ch_a_554050d6.png':
     Array.from(
       { length: 10 },
-      (_, i) => `/assets/aistudio/baked/pilgrim_male_f${i}.png`
+      (_, i) => `./assets/aistudio/baked/pilgrim_male_f${i}.png`
     ),
 
   // Sư Trụ Trì (8 frames: 0..7)
+  './assets/aistudio/baked/abbot_strip.png': Array.from(
+    { length: 8 },
+    (_, i) => `./assets/aistudio/baked/abbot_f${i}.png`
+  ),
   '/assets/aistudio/baked/abbot_strip.png': Array.from(
     { length: 8 },
-    (_, i) => `/assets/aistudio/baked/abbot_f${i}.png`
+    (_, i) => `./assets/aistudio/baked/abbot_f${i}.png`
   ),
   '/assets/aistudio/Sprite_sheet_nh_n_v_t_tr__tr__0c0e28e0.png': Array.from(
     { length: 8 },
-    (_, i) => `/assets/aistudio/baked/abbot_f${i}.png`
+    (_, i) => `./assets/aistudio/baked/abbot_f${i}.png`
   ),
 
   // Chú Tiểu Lớn (8 frames: 0..7)
+  './assets/aistudio/baked/senior_novice_strip.png': Array.from(
+    { length: 8 },
+    (_, i) => `./assets/aistudio/baked/senior_novice_f${i}.png`
+  ),
   '/assets/aistudio/baked/senior_novice_strip.png': Array.from(
     { length: 8 },
-    (_, i) => `/assets/aistudio/baked/senior_novice_f${i}.png`
+    (_, i) => `./assets/aistudio/baked/senior_novice_f${i}.png`
   ),
   '/assets/aistudio/Sprite_sheet_nh_n_v_t_ch__ti_u_l_n_9bcfb2ed.png':
     Array.from(
       { length: 8 },
-      (_, i) => `/assets/aistudio/baked/senior_novice_f${i}.png`
+      (_, i) => `./assets/aistudio/baked/senior_novice_f${i}.png`
     ),
 
   // Chú Tiểu Nhỏ (8 frames: 0..7)
+  './assets/aistudio/baked/junior_novice_strip.png': Array.from(
+    { length: 8 },
+    (_, i) => `./assets/aistudio/baked/junior_novice_f${i}.png`
+  ),
   '/assets/aistudio/baked/junior_novice_strip.png': Array.from(
     { length: 8 },
-    (_, i) => `/assets/aistudio/baked/junior_novice_f${i}.png`
+    (_, i) => `./assets/aistudio/baked/junior_novice_f${i}.png`
   ),
   '/assets/aistudio/Sprite_sheet_nh_n_v_t_ch__ti_u_nh__1cd03d61.png':
     Array.from(
       { length: 8 },
-      (_, i) => `/assets/aistudio/baked/junior_novice_f${i}.png`
+      (_, i) => `./assets/aistudio/baked/junior_novice_f${i}.png`
     ),
 };
 
@@ -103,6 +123,13 @@ export function processHorizontalSpritesheet(
 ): Promise<string[]> {
   if (BAKED_STATIC_FRAMES[url] && BAKED_STATIC_FRAMES[url].length === expectedFrames) {
     return Promise.resolve(BAKED_STATIC_FRAMES[url]);
+  }
+  const normalizedUrl = url.startsWith('/assets/') ? `.${url}` : url;
+  if (
+    BAKED_STATIC_FRAMES[normalizedUrl] &&
+    BAKED_STATIC_FRAMES[normalizedUrl].length === expectedFrames
+  ) {
+    return Promise.resolve(BAKED_STATIC_FRAMES[normalizedUrl]);
   }
 
   const cacheKey = `${CACHE_VERSION}::${url}::${expectedFrames}`;

@@ -9,16 +9,16 @@ import {
 } from '../types/game';
 
 export const DEFAULT_BG_IMAGE =
-  '/assets/aistudio/Grand_Buddhist_Temple_with_Towering_Golden_Halo_06591c77.png';
+  './assets/aistudio/Grand_Buddhist_Temple_with_Towering_Golden_Halo_06591c77.png';
 
 export const DEFAULT_SPRITESHEETS: CustomAssetsConfig = {
   customBgUrl: null,
   templeSignPngUrl: null,
-  pilgrimFemaleSpritesheetUrl: '/assets/aistudio/baked/pilgrim_female_strip.png',
-  pilgrimMaleSpritesheetUrl: '/assets/aistudio/baked/pilgrim_male_strip.png',
-  abbotSpritesheetUrl: '/assets/aistudio/baked/abbot_strip.png',
-  seniorNoviceSpritesheetUrl: '/assets/aistudio/baked/senior_novice_strip.png',
-  juniorNoviceSpritesheetUrl: '/assets/aistudio/baked/junior_novice_strip.png',
+  pilgrimFemaleSpritesheetUrl: './assets/aistudio/baked/pilgrim_female_strip.png',
+  pilgrimMaleSpritesheetUrl: './assets/aistudio/baked/pilgrim_male_strip.png',
+  abbotSpritesheetUrl: './assets/aistudio/baked/abbot_strip.png',
+  seniorNoviceSpritesheetUrl: './assets/aistudio/baked/senior_novice_strip.png',
+  juniorNoviceSpritesheetUrl: './assets/aistudio/baked/junior_novice_strip.png',
   offeringIncenseUrl: null,
   offeringRoseUrl: null,
   offeringLotusUrl: null,
@@ -161,29 +161,45 @@ export const DEFAULT_CONFIG: GameConfig = {
   dharmaArticles: DEFAULT_DHARMA_ARTICLES,
   activeDharmaId: 'dharma-1',
 
-  // Chế độ đọc sự kiện "Người thật" (Mặc định chỉ bật đọc lời chúc khi người xem tặng quà)
+  // Chế độ đọc sự kiện gộp chung (Người thật & NPC dùng chung kho câu ngẫu nhiên theo mục 1, 2, 3)
   realWelcomeTtsEnabled: false,
   realWelcomeTtsTemplate: 'Chào mừng [Tên] đến kim thiền tự',
+  npcWelcomeTtsEnabled: false,
+  npcWelcomeTtsTemplate: 'Chào mừng [Tên] đến kim thiền tự',
+  welcomeTtsTemplates: [
+    'Chào mừng [Tên] đến Kim Thiền Tự lễ Phật cầu an',
+    'Hoan hỷ chào đón Phật tử [Tên] về chánh điện Kim Thiền Tự',
+    'Nam mô A Di Đà Phật, chào mừng [Tên] hữu duyên ghé thăm chùa',
+  ],
+
   realGiftTtsEnabled: true,
   realGiftTtsTemplate:
     'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe',
-  realPrayerTtsEnabled: false,
-  realPrayerTtsTemplate: '[Tên] cầu nguyện: [Comment]',
-
-  // Chế độ đọc sự kiện "NPC" (Tương tự có 3 mục để bật tắt giống người thật)
-  npcWelcomeTtsEnabled: false,
-  npcWelcomeTtsTemplate: 'Chào mừng [Tên] đến kim thiền tự',
   npcGiftTtsEnabled: false,
   npcGiftTtsTemplate:
     'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe',
+  giftTtsTemplates: [
+    'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe',
+    'Tán thán công đức của thí chủ [Tên], chúc gia đạo vạn sự cát tường, tài lộc hanh thông',
+    'Cảm ơn tấm lòng thành của [Tên], nguyện cầu mười phương Chư Phật gia hộ cho bạn luôn bình an',
+  ],
+
+  realPrayerTtsEnabled: false,
+  realPrayerTtsTemplate: '[Tên] cầu nguyện: [Comment]',
   npcPrayerTtsEnabled: false,
   npcPrayerTtsTemplate: '[Tên] cầu nguyện: [Comment]',
+  prayerTtsTemplates: [
+    '[Tên] thành tâm cầu nguyện: [Comment]',
+    'Phật tử [Tên] gửi lời ước nguyện: [Comment]',
+    'Nguyện cho lời cầu của [Tên] sớm thành hiện thực: [Comment]',
+  ],
 
   // Chế độ Trụ trì bong bóng chat (Live text trong bong bóng chat cùng với việc đọc)
   abbotBubbleEnabled: true,
 
   showWaypoints: false,
   showZoneBounds: false,
+  maxStageCapacity: 36,
   autoCrowd: true,
   botTargetCrowd: 24,
   botVipPercent: 20,
@@ -251,6 +267,8 @@ export const DEFAULT_CONFIG: GameConfig = {
     showGuideBox: true,
     showNoticeBoardBox: true,
     showToastBox: true,
+    showNewPilgrimToast: true,
+    leaderboardMaxRanks: 5,
     hudOpacity: 0.88,
     editLayoutMode: false,
   },
@@ -270,12 +288,7 @@ export const INITIAL_VIP_SLOTS: KneelSlot[] = [
   { id: 'vip-7', x: 492, y: 598, side: 'right', isVip: true, occupiedById: null },
 ];
 
-export const INITIAL_DONORS: DonorEntry[] = [
-  { username: 'ng thái available', coins: 227 },
-  { username: 'suaxetrungsh', coins: 164 },
-  { username: 'helixing', coins: 95 },
-  { username: 'Phật tử ẩn danh', coins: 50 },
-];
+export const INITIAL_DONORS: DonorEntry[] = [];
 
 export const AVATAR_COLORS = [
   '#d97706',
@@ -347,12 +360,17 @@ export const SAMPLE_PRAYERS = [
   'Thành tâm lễ Phật, cầu cho mọi người trong phòng live bình an',
 ];
 
-export const NODE_SERVER_CODE = `// File: server.js (Tích hợp TikTok Live + Giọng đọc AI HoaiMy/NamMinh miễn phí)
+export const NODE_SERVER_CODE = `// File: server.js (Tích hợp TikTok Live v1/v2 + Giọng đọc AI HoaiMy/NamMinh miễn phí)
 const express = require('express');
 const cors = require('cors');
-const { WebcastPushConnection } = require('tiktok-live-connector');
+const tiktokPkg = require('tiktok-live-connector');
+const TikTokConnector = tiktokPkg.WebcastPushConnection || tiktokPkg.TikTokLiveConnection;
 const { WebSocketServer } = require('ws');
-const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+
+let MsEdgeTTS, OUTPUT_FORMAT;
+try {
+  ({ MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts'));
+} catch (e) {}
 
 // 1. Tạo Server HTTP cấp phát Giọng Đọc AI Miễn Phí cho Web & OBS Browser Source
 const app = express();
@@ -363,7 +381,7 @@ app.get('/tts', async (req, res) => {
     const text = (req.query.text || 'Nam mô A Di Đà Phật').slice(0, 220);
     const voice = req.query.voice || 'vi-VN-HoaiMyNeural';
 
-    if (voice === 'google-vi') {
+    if (voice === 'google-vi' || !MsEdgeTTS) {
       const gUrl = \`https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=\${encodeURIComponent(text)}\`;
       const response = await fetch(gUrl);
       res.setHeader('Content-Type', 'audio/mpeg');
@@ -385,15 +403,67 @@ app.get('/tts', async (req, res) => {
 app.listen(3000, () => console.log('Server Giọng Đọc AI đang chạy tại: http://localhost:3000/tts'));
 
 // 2. Tạo WebSocket Server truyền sự kiện TikTok Live + Đồng bộ Tab Admin sang OBS
-const TIKTOK_USERNAME = "ten_id_tiktok_cua_ban"; // Đổi thành ID TikTok đang Live
+const TIKTOK_USERNAME = "ten_id_tiktok_cua_ban"; // Đổi thành ID TikTok đang Live (không có chữ @)
+const SIGN_API_KEY = ""; // (Tùy chọn) Dán API Key miễn phí từ https://www.eulerstream.com nếu bị lỗi 403 SignatureError
+
 const wss = new WebSocketServer({ port: 8080 });
-const tiktok = new WebcastPushConnection(TIKTOK_USERNAME);
+const tiktok = new TikTokConnector(TIKTOK_USERNAME, {
+  enableExtendedGiftInfo: false,
+  ...(SIGN_API_KEY ? { signApiKey: SIGN_API_KEY } : {})
+});
 
 function broadcast(data, excludeWs = null) {
   const json = JSON.stringify(data);
   wss.clients.forEach(client => {
     if (client !== excludeWs && client.readyState === 1) client.send(json);
   });
+}
+
+function getUserName(data) {
+  return (
+    data?.user?.nickname ||
+    data?.user?.uniqueId ||
+    data?.nickname ||
+    data?.uniqueId ||
+    'Phật Tử'
+  );
+}
+
+function getUserAvatar(data) {
+  const u = data?.user || data?.userDetails || data || {};
+  const candidates = [
+    u.profilePictureUrl,
+    u.avatarUrl,
+    u.profilePicture?.url?.[0],
+    u.profilePicture?.urls?.[0],
+    u.profilePicture?.urlList?.[0],
+    u.avatarThumb?.url?.[0],
+    u.avatarThumb?.urls?.[0],
+    u.avatarThumb?.urlList?.[0],
+    u.avatarMedium?.url?.[0],
+    u.avatarMedium?.urls?.[0],
+    u.avatarMedium?.urlList?.[0],
+    data?.profilePictureUrl,
+    data?.avatarUrl,
+    data?.profilePicture?.url?.[0],
+    data?.profilePicture?.urls?.[0],
+  ];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.startsWith('http')) return c;
+  }
+  const searchBoxes = [u.profilePicture, u.avatarThumb, data?.profilePicture];
+  for (const box of searchBoxes) {
+    if (box && typeof box === 'object') {
+      for (const val of Object.values(box)) {
+        if (typeof val === 'string' && val.startsWith('http')) return val;
+        if (Array.isArray(val)) {
+          const found = val.find(item => typeof item === 'string' && item.startsWith('http'));
+          if (found) return found;
+        }
+      }
+    }
+  }
+  return null;
 }
 
 wss.on('connection', ws => {
@@ -406,34 +476,58 @@ wss.on('connection', ws => {
 });
 
 tiktok.connect().then(state => {
-  console.log(\`Đã kết nối phòng Live: \${state.roomId}\`);
+  console.log(\`Đã kết nối phòng Live: \${state.roomId || TIKTOK_USERNAME}\`);
 }).catch(err => console.error('Lỗi kết nối TikTok:', err));
 
 tiktok.on('chat', data => {
   broadcast({
     type: 'chat',
-    username: data.nickname || data.uniqueId,
-    avatarUrl: data.profilePictureUrl || null,
-    comment: data.comment
+    username: getUserName(data),
+    avatarUrl: getUserAvatar(data),
+    comment: data.comment || ''
   });
 });
 
+const giftStreakTracker = new Map();
+
 tiktok.on('gift', data => {
-  if (data.giftType === 1 && !data.repeatEnd) return;
+  const username = getUserName(data);
+  const giftId = data?.giftId || data?.gift?.id || data?.giftDetails?.giftName || data?.giftName || 'default';
+  const streakKey = \`\${username}_\${giftId}\`;
+  const diamondCount = Number(
+    data?.giftDetails?.diamondCount ??
+    data?.gift?.diamondCount ??
+    data?.extendedGiftInfo?.diamond_count ??
+    data?.diamondCount ??
+    1
+  ) || 1;
+  const repeatCount = Math.max(1, Number(data?.repeatCount ?? data?.comboCount ?? 1) || 1);
+  const prevCount = giftStreakTracker.get(streakKey) || 0;
+  const deltaCount = repeatCount > prevCount ? repeatCount - prevCount : (data?.repeatEnd ? 0 : repeatCount);
+
+  if (data?.repeatEnd) {
+    giftStreakTracker.delete(streakKey);
+  } else {
+    giftStreakTracker.set(streakKey, repeatCount);
+    setTimeout(() => giftStreakTracker.delete(streakKey), 8000);
+  }
+
+  if (deltaCount <= 0) return;
+
   broadcast({
     type: 'gift',
-    username: data.nickname || data.uniqueId,
-    avatarUrl: data.profilePictureUrl || null,
-    giftName: data.giftName,
-    coins: (data.diamondCount || 1) * (data.repeatCount || 1)
+    username,
+    avatarUrl: getUserAvatar(data),
+    giftName: data?.giftDetails?.giftName || data?.gift?.name || data?.giftName || 'Lễ vật',
+    coins: Math.max(1, diamondCount * deltaCount)
   });
 });
 
 tiktok.on('like', data => {
   broadcast({
     type: 'like',
-    username: data.nickname || data.uniqueId,
-    avatarUrl: data.profilePictureUrl || null,
+    username: getUserName(data),
+    avatarUrl: getUserAvatar(data),
     likeCount: data.likeCount || 1
   });
 });
@@ -441,7 +535,9 @@ tiktok.on('like', data => {
 tiktok.on('follow', data => {
   broadcast({
     type: 'follow',
-    username: data.nickname || data.uniqueId,
-    avatarUrl: data.profilePictureUrl || null
+    username: getUserName(data),
+    avatarUrl: getUserAvatar(data)
   });
 });`;
+
+

@@ -359,17 +359,17 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = ({
         <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
           <div className="flex justify-between text-[11px] text-stone-300 mb-1">
             <span>
-              Thời gian ngồi tại chỗ (Tính cả bái vài cái đầu + ngồi yên, tối thiểu 3s)
+              Thời gian ngồi tọa tới khi rời đi (Người thật & NPC, tối thiểu 3s)
             </span>
-            <span className="text-amber-300 font-mono tabular-nums">
+            <span className="text-amber-300 font-mono tabular-nums font-bold">
               {config.prayDurationSec} giây
             </span>
           </div>
           <input
             type="range"
             min={3}
-            max={60}
-            value={config.prayDurationSec}
+            max={180}
+            value={Math.min(180, Math.max(3, config.prayDurationSec))}
             onChange={(e) =>
               onUpdateConfig({ prayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3) })
             }
@@ -569,6 +569,70 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = ({
                 </div>
               );
             })}
+          </div>
+
+          {/* Tùy chọn Pop-up người mới vào & Số lượng Rank hiển thị trong Bảng Công Đức */}
+          <div className="pt-2 border-t border-stone-800 grid grid-cols-2 gap-2">
+            <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-2">
+              <span className="text-[10.5px] font-semibold text-stone-200 truncate">
+                Pop-up: Người mới vào
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateHudLayout({
+                    showNewPilgrimToast:
+                      config.hudLayout.showNewPilgrimToast === false,
+                  })
+                }
+                className={`px-2 py-0.5 rounded border text-[10px] font-bold cursor-pointer transition shrink-0 ${
+                  config.hudLayout.showNewPilgrimToast !== false
+                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                    : 'bg-stone-900 border-stone-700 text-stone-400'
+                }`}
+              >
+                {config.hudLayout.showNewPilgrimToast !== false ? 'ĐANG BẬT' : 'ĐÃ TẮT'}
+              </button>
+            </div>
+
+            <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-1.5">
+              <span className="text-[10.5px] font-semibold text-stone-200 truncate">
+                Số Rank BXH:
+              </span>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateHudLayout({
+                      leaderboardMaxRanks: Math.max(
+                        1,
+                        (config.hudLayout.leaderboardMaxRanks ?? 5) - 1
+                      ),
+                    })
+                  }
+                  className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer"
+                >
+                  <Minus className="w-3 h-3" />
+                </button>
+                <span className="w-10 text-center text-[10.5px] font-mono font-bold text-amber-300">
+                  Top {config.hudLayout.leaderboardMaxRanks ?? 5}
+                </span>
+                <button
+                  type="button"
+                  onClick={() =>
+                    onUpdateHudLayout({
+                      leaderboardMaxRanks: Math.min(
+                        20,
+                        (config.hudLayout.leaderboardMaxRanks ?? 5) + 1
+                      ),
+                    })
+                  }
+                  className="w-5 h-5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer"
+                >
+                  <Plus className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 

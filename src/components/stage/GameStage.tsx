@@ -846,7 +846,8 @@ export const GameStage: React.FC<GameStageProps> = ({
   };
 
   const isGrandEventActive = goldenLotusRainUntil > Date.now();
-  const totalSeatCapacity = vipSlots.length + normalSlots.length;
+  const totalSeatCapacity =
+    config.maxStageCapacity || vipSlots.length + normalSlots.length;
   const activePilgrimCount = pilgrims.filter(
     (p) => p.state !== 'leave_side_to_aisle' && p.state !== 'leave_down_exit'
   ).length;

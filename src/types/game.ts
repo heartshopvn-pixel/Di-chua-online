@@ -73,6 +73,8 @@ export interface HudLayoutConfig {
   showGuideBox?: boolean;
   showNoticeBoardBox?: boolean;
   showToastBox?: boolean;
+  showNewPilgrimToast?: boolean;
+  leaderboardMaxRanks?: number;
   hudOpacity?: number;
   editLayoutMode: boolean;
 }
@@ -125,27 +127,31 @@ export interface GameConfig {
   dharmaArticles: DharmaArticleItem[];
   activeDharmaId: string;
 
-  // Chế độ đọc sự kiện "Người thật" (3 mục bật/tắt + nội dung)
+  // Chế độ đọc sự kiện gộp chung Người thật & NPC (Mỗi mục 1, 2, 3 tích chọn đối tượng & kho mẫu câu ngẫu nhiên)
   realWelcomeTtsEnabled: boolean;
   realWelcomeTtsTemplate: string;
-  realGiftTtsEnabled: boolean;
-  realGiftTtsTemplate: string;
-  realPrayerTtsEnabled: boolean;
-  realPrayerTtsTemplate: string;
-
-  // Chế độ đọc sự kiện "NPC" (3 mục bật/tắt + nội dung)
   npcWelcomeTtsEnabled: boolean;
   npcWelcomeTtsTemplate: string;
+  welcomeTtsTemplates: string[];
+
+  realGiftTtsEnabled: boolean;
+  realGiftTtsTemplate: string;
   npcGiftTtsEnabled: boolean;
   npcGiftTtsTemplate: string;
+  giftTtsTemplates: string[];
+
+  realPrayerTtsEnabled: boolean;
+  realPrayerTtsTemplate: string;
   npcPrayerTtsEnabled: boolean;
   npcPrayerTtsTemplate: string;
+  prayerTtsTemplates: string[];
 
   // Chế độ Trụ trì bong bóng chat (Live text trong bong bóng chat cùng với việc đọc)
   abbotBubbleEnabled: boolean;
 
   showWaypoints: boolean;
   showZoneBounds: boolean;
+  maxStageCapacity: number;
   autoCrowd: boolean;
   botTargetCrowd: number;
   botVipPercent: number;
@@ -410,6 +416,7 @@ export interface SyncPacket {
     | 'TRIGGER_FOLLOW'
     | 'TRIGGER_GRAND_EVENT'
     | 'ENTITY_CHAT'
+    | 'CLEAR_DONORS'
     | 'RESTORE_BACKUP';
   payload: Record<string, any>;
   ts: number;

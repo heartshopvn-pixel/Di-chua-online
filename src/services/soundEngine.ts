@@ -6,6 +6,15 @@ export type TTSStatusListener = (
   spokenText?: string
 ) => void;
 
+export interface EventTtsQueueSnapshot {
+  waitingCount: number;
+  isPlayingEvent: boolean;
+  currentEventText: string;
+  queueItems: string[];
+}
+
+export type EventTtsQueueListener = (snapshot: EventTtsQueueSnapshot) => void;
+
 export type DharmaArticleChangeListener = (nextArticleId: string) => void;
 
 function splitDharmaIntoSentences(rawText: string): string[] {
@@ -46,8 +55,10 @@ class TempleSoundService {
   private ttsQueue: string[] = [];
   private isSpeaking = false;
   private isSpeakingDharma = false;
+  private currentEventText = '';
   private currentAudio: HTMLAudioElement | null = null;
   private statusListeners = new Set<TTSStatusListener>();
+  private queueListeners = new Set<EventTtsQueueListener>();
   private dharmaChangeListeners = new Set<DharmaArticleChangeListener>();
 
   // Nhạc nền (BGM) state
@@ -106,6 +117,38 @@ class TempleSoundService {
     return () => this.statusListeners.delete(fn);
   }
 
+  public subscribeEventQueue(fn: EventTtsQueueListener) {
+    this.queueListeners.add(fn);
+    fn(this.getEventQueueSnapshot());
+    return () => this.queueListeners.delete(fn);
+  }
+
+  public getEventQueueSnapshot(): EventTtsQueueSnapshot {
+    const isPlayingEvent = this.isSpeaking && !this.isSpeakingDharma;
+    return {
+      waitingCount: this.ttsQueue.length,
+      isPlayingEvent,
+      currentEventText: isPlayingEvent ? this.currentEventText : '',
+      queueItems: [...this.ttsQueue],
+    };
+  }
+
+  private emitEventQueue() {
+    const snap = this.getEventQueueSnapshot();
+    this.queueListeners.forEach((fn) => fn(snap));
+  }
+
+  public clearEventQueue() {
+    this.ttsQueue = [];
+    if (this.isSpeaking && !this.isSpeakingDharma) {
+      this.stopCurrentUtteranceOnly();
+      if (this.latestConfig?.dharmaEnabled) {
+        this.scheduleNextDharmaStep(250);
+      }
+    }
+    this.emitEventQueue();
+  }
+
   public subscribeDharmaArticleChange(fn: DharmaArticleChangeListener) {
     this.dharmaChangeListeners.add(fn);
     return () => this.dharmaChangeListeners.delete(fn);
@@ -158,6 +201,7 @@ class TempleSoundService {
   private stopCurrentUtteranceOnly() {
     this.isSpeaking = false;
     this.isSpeakingDharma = false;
+    this.currentEventText = '';
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -171,6 +215,7 @@ class TempleSoundService {
       }
     }
     this.emitStatus('Sẵn sàng', false, '');
+    this.emitEventQueue();
   }
 
   private stopBgmInternal() {
@@ -391,6 +436,7 @@ class TempleSoundService {
     this.ttsQueue = [];
     this.isSpeaking = false;
     this.isSpeakingDharma = false;
+    this.currentEventText = '';
     if (this.dharmaNextTimer) {
       clearTimeout(this.dharmaNextTimer);
       this.dharmaNextTimer = null;
@@ -408,6 +454,7 @@ class TempleSoundService {
       }
     }
     this.emitStatus('Đã ngắt đọc', false, '');
+    this.emitEventQueue();
   }
 
   /**
@@ -443,9 +490,10 @@ class TempleSoundService {
     if (isPriority) {
       this.ttsQueue.unshift(text);
     } else {
-      if (this.ttsQueue.length >= 6) this.ttsQueue.pop();
+      if (this.ttsQueue.length >= 50) this.ttsQueue.pop();
       this.ttsQueue.push(text);
     }
+    this.emitEventQueue();
     this.processQueue(config);
   }
 
@@ -550,25 +598,32 @@ class TempleSoundService {
       isDharmaLine = true;
     }
 
-    if (!nextText) return;
+    if (!nextText) {
+      this.emitEventQueue();
+      return;
+    }
 
     this.isSpeaking = true;
     this.isSpeakingDharma = isDharmaLine;
+    this.currentEventText = isDharmaLine ? '' : nextText;
     this.emitStatus(
       isDharmaLine ? 'Đang thuyết pháp...' : 'Đang đọc sự kiện...',
       true,
       nextText
     );
+    this.emitEventQueue();
 
     const finish = () => {
       this.isSpeaking = false;
       this.isSpeakingDharma = false;
+      this.currentEventText = '';
       const latestCfg = this.latestConfig || config;
       const hasMore =
         this.ttsQueue.length > 0 || Boolean(latestCfg.dharmaEnabled);
       if (!hasMore) {
         this.emitStatus('Sẵn sàng', false, '');
       }
+      this.emitEventQueue();
       this.scheduleNextDharmaStep(isDharmaLine ? 420 : 200);
     };
 

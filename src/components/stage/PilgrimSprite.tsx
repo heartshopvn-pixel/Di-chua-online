@@ -183,10 +183,21 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
       woodenFishRippleUntil,
     } = pilgrim;
 
-    const [avatarImgError, setAvatarImgError] = React.useState(false);
+    const [avatarStage, setAvatarStage] = React.useState<'direct' | 'proxy' | 'failed'>('direct');
     React.useEffect(() => {
-      setAvatarImgError(false);
+      setAvatarStage('direct');
     }, [avatarUrl]);
+
+    const effectiveAvatarSrc = React.useMemo(() => {
+      if (!avatarUrl || avatarStage === 'failed') return null;
+      if (
+        avatarStage === 'proxy' &&
+        (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))
+      ) {
+        return `https://wsrv.nl/?url=${encodeURIComponent(avatarUrl)}&w=64&h=64&fit=cover`;
+      }
+      return avatarUrl;
+    }, [avatarUrl, avatarStage]);
 
     const sheetUrl =
       gender === 'female'
@@ -414,11 +425,22 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
             transform: `translateX(-50%) scale(${nameTagScale.toFixed(2)})`,
           }}
         >
-          {avatarUrl && !avatarImgError ? (
+          {effectiveAvatarSrc ? (
             <img
-              src={avatarUrl}
+              src={effectiveAvatarSrc}
               alt={username}
-              onError={() => setAvatarImgError(true)}
+              referrerPolicy="no-referrer"
+              onError={() => {
+                if (
+                  avatarStage === 'direct' &&
+                  avatarUrl &&
+                  (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://'))
+                ) {
+                  setAvatarStage('proxy');
+                } else {
+                  setAvatarStage('failed');
+                }
+              }}
               className="w-3.5 h-3.5 rounded-sm object-cover shrink-0 border border-white/25 bg-stone-900"
             />
           ) : (

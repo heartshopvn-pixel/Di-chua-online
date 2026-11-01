@@ -214,6 +214,7 @@ export const StageHud: React.FC<StageHudProps> = ({
     showGuideBox = true,
     showNoticeBoardBox = true,
     showToastBox = true,
+    leaderboardMaxRanks = 5,
     hudOpacity = 0.88,
     editLayoutMode,
   } = hudLayout;
@@ -224,12 +225,15 @@ export const StageHud: React.FC<StageHudProps> = ({
   const safeGuideFontSize = Math.max(7, Math.min(24, guideFontSize || 9));
   const safePilgrimCountFontSize = Math.max(7, Math.min(24, pilgrimCountFontSize || 10));
   const safeToastFontSize = Math.max(7, Math.min(24, toastFontSize || 10));
+  const safeLeaderboardMaxRanks = Math.max(1, Math.min(20, leaderboardMaxRanks || 5));
 
   const safeOpacity = Math.max(0.05, Math.min(1, hudOpacity));
   const boardBgStyle = `rgba(12, 10, 9, ${safeOpacity.toFixed(2)})`;
   const innerItemBgStyle = `rgba(28, 25, 23, ${Math.min(1, safeOpacity + 0.05).toFixed(2)})`;
 
-  const topDonors = [...donors].sort((a, b) => b.coins - a.coins).slice(0, 4);
+  const topDonors = [...donors]
+    .sort((a, b) => b.coins - a.coins)
+    .slice(0, safeLeaderboardMaxRanks);
   const safeTarget = Math.max(1, grandEventTarget || 1000);
   const progressPercent = isGrandEventActive
     ? 100
@@ -560,20 +564,29 @@ export const StageHud: React.FC<StageHudProps> = ({
             </div>
           </div>
           <div
-            className="space-y-0.5 flex-1 flex flex-col justify-around overflow-hidden"
+            className="space-y-0.5 flex-1 flex flex-col justify-start overflow-y-auto"
             style={{ fontSize: `${Math.max(7, safeLeaderboardFontSize - 0.5)}px` }}
           >
-            {topDonors.map((d, idx) => (
-              <div key={d.username} className="flex items-center justify-between text-stone-100 gap-1">
-                <span className="truncate">
-                  <b className="text-amber-300 font-mono mr-0.5">{idx + 1}.</b>
-                  {d.username}
-                </span>
-                <span className="font-bold font-mono text-amber-400 tabular-nums shrink-0">
-                  {d.coins}
-                </span>
+            {topDonors.length > 0 ? (
+              topDonors.map((d, idx) => (
+                <div
+                  key={`${d.username}-${idx}`}
+                  className="flex items-center justify-between text-stone-100 gap-1 leading-tight"
+                >
+                  <span className="truncate">
+                    <b className="text-amber-300 font-mono mr-0.5">{idx + 1}.</b>
+                    {d.username}
+                  </span>
+                  <span className="font-bold font-mono text-amber-400 tabular-nums shrink-0">
+                    {d.coins}
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="my-auto text-center text-stone-400 italic leading-tight">
+                Chưa có thí chủ dâng lễ
               </div>
-            ))}
+            )}
           </div>
 
           {editLayoutMode && (

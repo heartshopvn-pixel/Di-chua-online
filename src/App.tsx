@@ -157,6 +157,10 @@ export default function App() {
           onResetAsset={engine.handleResetAsset}
           onSaveBackupJson={engine.handleSaveBackupJson}
           onLoadBackupJson={engine.handleLoadBackupJson}
+          donorsCount={engine.donors.length}
+          onClearDonors={engine.handleClearDonors}
+          eventTtsQueue={engine.eventTtsQueue}
+          onClearEventTtsQueue={engine.handleClearEventTtsQueue}
         />
       )}
     </div>

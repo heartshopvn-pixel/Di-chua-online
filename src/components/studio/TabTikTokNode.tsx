@@ -53,6 +53,29 @@ export const TabTikTokNode: React.FC<TabTikTokNodeProps> = ({ wsStatus, onConnec
             <span>Kết nối</span>
           </button>
         </div>
+
+        <div className="flex items-center gap-1.5 pt-0.5">
+          <button
+            type="button"
+            onClick={() => {
+              setWsUrl('ws://localhost:8080');
+              onConnectWs('ws://localhost:8080');
+            }}
+            className="px-2 py-1 rounded bg-stone-900 hover:bg-stone-800 border border-stone-700 text-[10px] text-stone-300 cursor-pointer"
+          >
+            Node.js (ws://localhost:8080)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWsUrl('ws://localhost:21213');
+              onConnectWs('ws://localhost:21213');
+            }}
+            className="px-2 py-1 rounded bg-stone-900 hover:bg-stone-800 border border-amber-500/40 text-[10px] text-amber-300 cursor-pointer"
+          >
+            TikFinity App (ws://localhost:21213)
+          </button>
+        </div>
       </section>
 
       <hr className="border-stone-800/80" />

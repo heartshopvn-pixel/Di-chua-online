@@ -115,6 +115,15 @@ interface DevStudioProps {
   onResetAsset: (key: keyof CustomAssetsConfig) => void;
   onSaveBackupJson: () => void;
   onLoadBackupJson: (rawJsonText: string) => { ok: boolean; message: string };
+  donorsCount?: number;
+  onClearDonors?: () => void;
+  eventTtsQueue: {
+    waitingCount: number;
+    isPlayingEvent: boolean;
+    currentEventText: string | null;
+    queueItems: string[];
+  };
+  onClearEventTtsQueue: () => void;
 }
 
 export const DevStudio: React.FC<DevStudioProps> = ({
@@ -182,6 +191,10 @@ export const DevStudio: React.FC<DevStudioProps> = ({
   onResetAsset,
   onSaveBackupJson,
   onLoadBackupJson,
+  donorsCount = 0,
+  onClearDonors,
+  eventTtsQueue,
+  onClearEventTtsQueue,
 }) => {
   const [copiedObsLink, setCopiedObsLink] = useState(false);
   const [backupNotice, setBackupNotice] = useState<{
@@ -509,6 +522,8 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             onTriggerGiftCombo={onTriggerGiftCombo}
             onSaveBackupJson={onSaveBackupJson}
             onLoadBackupJson={onLoadBackupJson}
+            donorsCount={donorsCount}
+            onClearDonors={onClearDonors}
           />
         )}
 
@@ -516,6 +531,8 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           <TabAudio
             config={config}
             ttsStatus={ttsStatus}
+            eventTtsQueue={eventTtsQueue}
+            onClearEventTtsQueue={onClearEventTtsQueue}
             onUpdateConfig={onUpdateConfig}
             onPlayBell={onPlayBell}
             onPlayWoodenFish={onPlayWoodenFish}

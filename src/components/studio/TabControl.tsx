@@ -46,6 +46,8 @@ interface TabControlProps {
   ) => void;
   onSaveBackupJson: () => void;
   onLoadBackupJson: (rawJsonText: string) => { ok: boolean; message: string };
+  donorsCount?: number;
+  onClearDonors?: () => void;
 }
 
 export const TabControl: React.FC<TabControlProps> = ({
@@ -66,6 +68,8 @@ export const TabControl: React.FC<TabControlProps> = ({
   onTriggerGiftCombo,
   onSaveBackupJson,
   onLoadBackupJson,
+  donorsCount = 0,
+  onClearDonors,
 }) => {
   const [customName, setCustomName] = useState('Nguyễn Thị Yến Nhi');
   const [customPrayer, setCustomPrayer] = useState(
@@ -108,27 +112,45 @@ export const TabControl: React.FC<TabControlProps> = ({
 
   return (
     <div className="space-y-4">
-      {/* Live Crowd Telemetry Strip */}
-      <div className="grid grid-cols-3 divide-x divide-stone-800 rounded-lg border border-stone-800 bg-stone-900/50 py-2 px-3 text-center">
-        <div>
-          <div className="text-[11px] text-stone-400">Khách thật</div>
-          <div className="text-sm font-bold text-emerald-400 font-mono tabular-nums">
-            {realCount}
+      {/* Bảng Đếm Số Phật Tử Chi Tiết Trong Dev (Người thật / NPC / Hàng chờ / Sức chứa sân) */}
+      <section className="p-2.5 rounded-xl border border-amber-500/40 bg-stone-900/80 space-y-2">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+            <Users className="w-3.5 h-3.5 text-amber-400" />
+            <span>Bảng Đếm Số Phật Tử (Trực Tiếp)</span>
+          </span>
+          <span className="text-[11px] font-mono font-bold text-amber-300 bg-stone-950 px-2 py-0.5 rounded border border-stone-800">
+            Trên sân: {realCount + botCount} / {config.maxStageCapacity || 36} vị
+          </span>
+        </div>
+
+        <div className="grid grid-cols-4 divide-x divide-stone-800 rounded-lg border border-stone-800 bg-stone-950/90 py-2 px-1 text-center">
+          <div>
+            <div className="text-[10.5px] text-stone-400">Người thật</div>
+            <div className="text-sm font-extrabold text-emerald-400 font-mono tabular-nums">
+              {realCount}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10.5px] text-stone-400">Phật tử NPC</div>
+            <div className="text-sm font-extrabold text-amber-300 font-mono tabular-nums">
+              {botCount}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10.5px] text-stone-400">Hàng chờ</div>
+            <div className="text-sm font-extrabold text-cyan-300 font-mono tabular-nums">
+              {queueCount}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10.5px] text-stone-400">Cho phép vào</div>
+            <div className="text-sm font-extrabold text-stone-100 font-mono tabular-nums">
+              {config.maxStageCapacity || 36}
+            </div>
           </div>
         </div>
-        <div>
-          <div className="text-[11px] text-stone-400">Phật tử ảo (NPC)</div>
-          <div className="text-sm font-bold text-amber-300 font-mono tabular-nums">
-            {botCount}
-          </div>
-        </div>
-        <div>
-          <div className="text-[11px] text-stone-400">Hàng đợi</div>
-          <div className="text-sm font-bold text-stone-200 font-mono tabular-nums">
-            {queueCount}
-          </div>
-        </div>
-      </div>
+      </section>
 
       {/* Khối Sao Lưu & Khôi Phục Cấu Hình Toàn Bộ (.json) */}
       <section className="p-2.5 rounded-xl bg-emerald-950/30 border border-emerald-500/40 space-y-2">
@@ -369,7 +391,15 @@ export const TabControl: React.FC<TabControlProps> = ({
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];
-                  if (f) setCustomAvatarUrl(URL.createObjectURL(f));
+                  if (f) {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                      if (typeof reader.result === 'string') {
+                        setCustomAvatarUrl(reader.result);
+                      }
+                    };
+                    reader.readAsDataURL(f);
+                  }
                 }}
               />
             </label>
@@ -503,6 +533,111 @@ export const TabControl: React.FC<TabControlProps> = ({
           </div>
         </div>
 
+        {/* Tùy chọn Pop-up: Bật / Tắt Thông báo người mới vào */}
+        <div className="p-2.5 rounded-lg bg-stone-950/90 border border-stone-800 flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-bold text-amber-200">
+              Pop-up Thông Báo Trôi: Người mới vào
+            </div>
+            <div className="text-[10px] text-stone-400">
+              Bật / tắt dòng pop-up &ldquo;[Tên] vào chùa cầu an&rdquo; (vẫn giữ thông báo dâng quà)
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              onUpdateHudLayout({
+                showNewPilgrimToast: hud.showNewPilgrimToast === false,
+              })
+            }
+            className={`px-2.5 py-1.5 rounded-lg border text-[11px] font-bold flex items-center gap-1.5 shrink-0 cursor-pointer transition ${
+              hud.showNewPilgrimToast !== false
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                : 'bg-stone-900 border-stone-700 text-stone-400'
+            }`}
+          >
+            {hud.showNewPilgrimToast !== false ? (
+              <>
+                <Eye className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Đang bật</span>
+              </>
+            ) : (
+              <>
+                <EyeOff className="w-3.5 h-3.5 text-stone-500" />
+                <span>Đã tắt</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Tùy chỉnh Bảng Công Đức: Số lượng Rank hiển thị & Làm mới BXH */}
+        <div className="p-2.5 rounded-lg bg-stone-950/90 border border-stone-800 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-bold text-amber-300 block">
+                Bảng Công Đức: Số lượng Rank hiển thị
+              </span>
+              <span className="text-[10px] text-stone-400">
+                Hiện đang ghi nhận {donorsCount} thí chủ dâng lễ
+              </span>
+            </div>
+            {onClearDonors && (
+              <button
+                type="button"
+                onClick={onClearDonors}
+                className="px-2 py-1 rounded bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-[10px] font-bold text-rose-200 flex items-center gap-1 cursor-pointer transition shrink-0"
+                title="Xóa danh sách thí chủ cũ để bắt đầu phiên Live mới"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Làm mới BXH</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1">
+              {[3, 4, 5, 8, 10].map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() =>
+                    onUpdateHudLayout({ leaderboardMaxRanks: preset })
+                  }
+                  className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                    (hud.leaderboardMaxRanks ?? 5) === preset
+                      ? 'bg-amber-400 text-stone-950 font-bold'
+                      : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                  }`}
+                >
+                  Top {preset}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <input
+                type="range"
+                min={1}
+                max={20}
+                step={1}
+                value={hud.leaderboardMaxRanks ?? 5}
+                onChange={(e) =>
+                  onUpdateHudLayout({
+                    leaderboardMaxRanks: Math.max(
+                      1,
+                      Math.min(20, parseInt(e.target.value, 10) || 5)
+                    ),
+                  })
+                }
+                className="w-20 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+              />
+              <span className="text-[11px] font-mono font-bold text-amber-300 w-12 text-right">
+                Top {hud.leaderboardMaxRanks ?? 5}
+              </span>
+            </div>
+          </div>
+        </div>
+
         {/* Chỉnh sửa Tiêu đề, Nội dung & Size chữ của Bảng Thông Báo */}
         <div className="p-2.5 rounded-lg bg-stone-950/90 border border-stone-800 space-y-2">
           <div className="flex items-center justify-between gap-2">
@@ -630,69 +765,146 @@ export const TabControl: React.FC<TabControlProps> = ({
 
         <hr className="border-stone-800" />
 
-        {/* Phật tử duy trì giữ nhiệt trên sân */}
+        {/* Số Phật tử cho phép vào sân (Sức chứa tối đa trên sân) */}
         <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xs font-semibold text-stone-200">
-                Số Phật tử duy trì giữ nhiệt trên sân
-              </h2>
-              <p className="text-[10.5px] text-stone-400">
-                Tự động bù nhanh hoặc cho ra về để khớp chuẩn số lượng cài đặt
-              </p>
+          <div className="p-2.5 rounded-lg bg-stone-950/90 border border-emerald-500/35 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <h2 className="text-xs font-bold text-emerald-200">
+                  🚪 Số Phật tử cho phép vào sân (Sức chứa Chánh Điện)
+                </h2>
+                <p className="text-[10px] text-stone-400">
+                  Giới hạn tổng số Phật tử (Người thật + NPC) có mặt trên sân cùng lúc. Khi đầy, khách mới sẽ vào Hàng chờ (Người thật được ưu tiên nhường chỗ trước NPC).
+                </p>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <input
+                  type="number"
+                  min={1}
+                  max={200}
+                  value={config.maxStageCapacity || 36}
+                  onChange={(e) =>
+                    onUpdateConfig({
+                      maxStageCapacity: Math.max(
+                        1,
+                        Math.min(200, parseInt(e.target.value, 10) || 36)
+                      ),
+                    })
+                  }
+                  className="w-14 px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-xs font-mono font-bold text-emerald-300 text-right"
+                />
+                <span className="text-[11px] font-mono text-emerald-300">vị</span>
+              </div>
             </div>
-            <label className="flex items-center gap-1.5 text-xs font-semibold text-amber-300 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={config.autoCrowd}
-                onChange={(e) => onUpdateConfig({ autoCrowd: e.target.checked })}
-                className="accent-amber-500 w-4 h-4 cursor-pointer"
-              />
-              <span>{config.autoCrowd ? 'Đang bật' : 'Đã tắt'}</span>
-            </label>
-          </div>
 
-          <div className="grid grid-cols-2 gap-2.5">
-            <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800">
-              <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-                <span>Duy trì trên sân</span>
-                <span className="text-amber-300 font-mono font-bold tabular-nums">
-                  {realCount + botCount} / {config.botTargetCrowd} vị
-                </span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 shrink-0">
+                {[16, 24, 36, 48, 64, 80].map((cap) => (
+                  <button
+                    key={cap}
+                    type="button"
+                    onClick={() => onUpdateConfig({ maxStageCapacity: cap })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                      (config.maxStageCapacity || 36) === cap
+                        ? 'bg-emerald-400 text-stone-950 font-bold'
+                        : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                    }`}
+                  >
+                    {cap}
+                  </button>
+                ))}
               </div>
               <input
                 type="range"
                 min={1}
-                max={60}
-                value={config.botTargetCrowd}
+                max={120}
+                step={1}
+                value={Math.min(120, Math.max(1, config.maxStageCapacity || 36))}
                 onChange={(e) =>
                   onUpdateConfig({
-                    botTargetCrowd: parseInt(e.target.value, 10),
+                    maxStageCapacity: Math.max(1, parseInt(e.target.value, 10) || 36),
                   })
                 }
-                className="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                className="flex-1 accent-emerald-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
               />
             </div>
 
-            <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800">
-              <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-                <span>Tỷ lệ NPC lên VIP</span>
-                <span className="text-amber-300 font-mono font-bold tabular-nums">
-                  {config.botVipPercent}%
-                </span>
+            <div className="flex items-center justify-between text-[10.5px] pt-1 border-t border-stone-800/80 font-mono">
+              <span className="text-emerald-300">
+                👤 Người thật: <b>{realCount}</b>
+              </span>
+              <span className="text-amber-300">
+                🤖 NPC: <b>{botCount}</b>
+              </span>
+              <span className="text-cyan-300">
+                ⏳ Hàng chờ: <b>{queueCount}</b>
+              </span>
+              <span className="text-stone-200">
+                Tổng sân: <b>{realCount + botCount}/{config.maxStageCapacity || 36}</b>
+              </span>
+            </div>
+          </div>
+
+          {/* Điều chỉnh thời gian ngồi tọa tới khi rời đi (Áp dụng cho cả Người thật & NPC) */}
+          <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-500/35 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-bold text-amber-200">
+                  ⏱️ Thời gian ngồi tọa tới khi rời đi (Người thật & NPC)
+                </div>
+                <div className="text-[10px] text-stone-400">
+                  Tính từ lúc bắt đầu bái lạy & ngồi thiền trên chiếu cho tới khi đứng dậy ra về
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <input
+                  type="number"
+                  min={3}
+                  max={300}
+                  value={config.prayDurationSec}
+                  onChange={(e) =>
+                    onUpdateConfig({
+                      prayDurationSec: Math.max(
+                        3,
+                        Math.min(300, parseInt(e.target.value, 10) || 3)
+                      ),
+                    })
+                  }
+                  className="w-14 px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-xs font-mono font-bold text-amber-300 text-right"
+                />
+                <span className="text-[11px] font-mono text-amber-300">giây</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 shrink-0">
+                {[10, 20, 30, 60, 120].map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => onUpdateConfig({ prayDurationSec: sec })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                      config.prayDurationSec === sec
+                        ? 'bg-amber-400 text-stone-950 font-bold'
+                        : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                    }`}
+                  >
+                    {sec}s
+                  </button>
+                ))}
               </div>
               <input
                 type="range"
-                min={0}
-                max={50}
-                step={2}
-                value={config.botVipPercent}
+                min={3}
+                max={180}
+                step={1}
+                value={Math.min(180, Math.max(3, config.prayDurationSec))}
                 onChange={(e) =>
                   onUpdateConfig({
-                    botVipPercent: parseInt(e.target.value, 10),
+                    prayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
                   })
                 }
-                className="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                className="flex-1 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
               />
             </div>
           </div>

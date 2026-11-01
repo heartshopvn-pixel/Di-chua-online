@@ -176,18 +176,97 @@ class LiveSyncService {
         this.setStatus('connected');
       };
 
+      const extractAvatar = (obj: any): string | null => {
+        if (!obj || typeof obj !== 'object') return null;
+        const u = obj.user || obj.userDetails || obj;
+        const candidates = [
+          obj.avatarUrl,
+          obj.profilePictureUrl,
+          u?.avatarUrl,
+          u?.profilePictureUrl,
+          u?.profilePicture?.url?.[0],
+          u?.profilePicture?.urls?.[0],
+          u?.profilePicture?.urlList?.[0],
+          u?.avatarThumb?.url?.[0],
+          u?.avatarThumb?.urls?.[0],
+          u?.avatarThumb?.urlList?.[0],
+          u?.avatarMedium?.url?.[0],
+          u?.avatarMedium?.urls?.[0],
+          obj.profilePicture?.url?.[0],
+          obj.profilePicture?.urls?.[0],
+        ];
+        for (const c of candidates) {
+          if (typeof c === 'string' && c.startsWith('http')) return c;
+        }
+        const boxes = [u?.profilePicture, u?.avatarThumb, obj.profilePicture];
+        for (const box of boxes) {
+          if (box && typeof box === 'object') {
+            for (const val of Object.values(box)) {
+              if (typeof val === 'string' && val.startsWith('http')) return val;
+              if (Array.isArray(val)) {
+                const found = val.find(
+                  (item) => typeof item === 'string' && item.startsWith('http')
+                );
+                if (found) return found;
+              }
+            }
+          }
+        }
+        return null;
+      };
+
       socket.onmessage = (event) => {
         try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'ADMIN_SYNC') {
-            this.dispatchIncomingSync(data as SyncPacket);
-          } else if (
-            data.type === 'chat' ||
-            data.type === 'gift' ||
-            data.type === 'like' ||
-            data.type === 'follow'
+          const raw = JSON.parse(event.data);
+          if (raw.type === 'ADMIN_SYNC') {
+            this.dispatchIncomingSync(raw as SyncPacket);
+            return;
+          }
+
+          // Format 1: Custom Node.js server.js bridge ({ type: 'chat' | 'gift' | 'like' | 'follow', ... })
+          if (
+            raw.type === 'chat' ||
+            raw.type === 'gift' ||
+            raw.type === 'like' ||
+            raw.type === 'follow'
           ) {
-            this.tiktokListeners.forEach((fn) => fn(data));
+            const normalized = {
+              ...raw,
+              avatarUrl: extractAvatar(raw),
+            };
+            this.tiktokListeners.forEach((fn) => fn(normalized));
+            return;
+          }
+
+          // Format 2: Direct TikFinity WebSocket (ws://localhost:21213) ({ event: 'chat' | 'gift' | 'like' | 'follow', data: {...} })
+          const evType = raw.event;
+          const d = raw.data || {};
+          if (evType === 'chat' || evType === 'gift' || evType === 'like' || evType === 'follow') {
+            if (evType === 'gift' && d.giftType === 1 && d.repeatEnd === false) {
+              return;
+            }
+            const username =
+              d.nickname || d.user?.nickname || d.uniqueId || d.user?.uniqueId || 'Phật Tử';
+            const avatarUrl = extractAvatar(d) || extractAvatar(raw);
+            const diamondCount =
+              d.diamondCount ??
+              d.giftDetails?.diamondCount ??
+              d.gift?.diamondCount ??
+              1;
+            const repeatCount = d.repeatCount ?? d.comboCount ?? 1;
+
+            this.tiktokListeners.forEach((fn) =>
+              fn({
+                type: evType,
+                username,
+                avatarUrl,
+                comment: d.comment || '',
+                giftName:
+                  d.giftName || d.giftDetails?.giftName || d.gift?.name || 'Lễ vật',
+                coins: Math.max(1, Number(diamondCount) * Number(repeatCount)),
+                likeCount: Number(d.likeCount || 1),
+              })
+            );
           }
         } catch {
           // Ignore malformed JSON
