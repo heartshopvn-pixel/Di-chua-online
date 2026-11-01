@@ -214,6 +214,7 @@ export const DEFAULT_CONFIG: GameConfig = {
   chatBubbleScale: 1.0,
   chatBubbleDurationSec: 12,
   grandEventTarget: 1000,
+  maxFlyingLotuses: 5,
   spawnPoint: { x: 270, y: 950 },
   exitPoint: { x: 270, y: 955 },
   incenseBurner: { x: 270, y: 485 },
@@ -422,10 +423,23 @@ function broadcast(data, excludeWs = null) {
 function getUserName(data) {
   return (
     data?.user?.nickname ||
+    data?.user?.displayId ||
     data?.user?.uniqueId ||
     data?.nickname ||
+    data?.displayId ||
     data?.uniqueId ||
     'Phật Tử'
+  );
+}
+
+function getCommentText(data) {
+  return (
+    data?.comment ||
+    data?.content ||
+    data?.text ||
+    data?.message ||
+    data?.common?.displayText?.defaultPattern ||
+    ''
   );
 }
 
@@ -480,11 +494,14 @@ tiktok.connect().then(state => {
 }).catch(err => console.error('Lỗi kết nối TikTok:', err));
 
 tiktok.on('chat', data => {
+  const username = getUserName(data);
+  const comment = getCommentText(data);
+  console.log(\`[CHAT] \${username}: \${comment}\`);
   broadcast({
     type: 'chat',
-    username: getUserName(data),
+    username,
     avatarUrl: getUserAvatar(data),
-    comment: data.comment || ''
+    comment
   });
 });
 
@@ -514,12 +531,15 @@ tiktok.on('gift', data => {
 
   if (deltaCount <= 0) return;
 
+  const giftName = data?.giftDetails?.giftName || data?.gift?.name || data?.giftName || 'Lễ vật';
+  const coins = Math.max(1, diamondCount * deltaCount);
+  console.log(\`[GIFT] \${username}: \${giftName} (\${coins} xu)\`);
   broadcast({
     type: 'gift',
     username,
     avatarUrl: getUserAvatar(data),
-    giftName: data?.giftDetails?.giftName || data?.gift?.name || data?.giftName || 'Lễ vật',
-    coins: Math.max(1, diamondCount * deltaCount)
+    giftName,
+    coins
   });
 });
 

@@ -166,6 +166,7 @@ export interface GameConfig {
   chatBubbleScale: number;
   chatBubbleDurationSec: number;
   grandEventTarget: number;
+  maxFlyingLotuses: number;
   spawnPoint: Point2D;
   exitPoint: Point2D;
   incenseBurner: Point2D;

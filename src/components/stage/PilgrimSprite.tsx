@@ -51,6 +51,9 @@ export function getPilgrimFrameIndex(p: PilgrimData): PilgrimFrameIndex {
 
   switch (p.state) {
     case 'walk_in_up':
+      if (Math.abs((p.laneX || 270) - p.x) > 4) {
+        return stepToggle ? 8 : 9;
+      }
       // Khi dâng lễ (isVip / coins > 0): đổi thành animation dâng lễ (Frame 7) dẫn người chơi đi đến trước lư hương
       if (p.isVip || p.coins > 0) {
         return 7;
@@ -224,10 +227,15 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
     const avatarInitial = (username || 'P').trim().charAt(0).toUpperCase();
     const isLeaving =
       state === 'leave_side_to_aisle' || state === 'leave_down_exit';
-    const displayPrayer =
-      state === 'wait_for_vip_slot'
-        ? `${prayer} (Chờ ghế VIP...)`
-        : prayer;
+    const isVipStyled = isVip || coins > 0;
+    const isOfferingAction =
+      (state === 'walk_in_up' && isVipStyled) ||
+      state === 'throw_offering_at_burner' ||
+      (state === 'ceremony_at_burner' && isVipStyled) ||
+      state === 'walk_to_vip_check' ||
+      state === 'wait_for_vip_slot';
+
+    const displayPrayer = (prayer || '').trim();
 
     const nowMs = Date.now();
     const showLotusBurst = Boolean(lotusBurstUntil && nowMs < lotusBurstUntil);
@@ -236,13 +244,14 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
     );
     const showChatBubble =
       !isLeaving &&
+      !isOfferingAction &&
       Boolean(displayPrayer) &&
-      (alwaysShowBubble ||
-        state === 'wait_for_vip_slot' ||
-        !chatBubbleUntil ||
-        nowMs < chatBubbleUntil);
+      Boolean(
+        chatBubbleUntil &&
+          chatBubbleUntil > 0 &&
+          (alwaysShowBubble || nowMs < chatBubbleUntil)
+      );
 
-    const isVipStyled = isVip || coins > 0;
     const hasCombo = Boolean(comboCount && comboCount > 1 && !isLeaving);
 
     // Hiển thị model lễ vật trên 2 tay khi đang đi dâng lễ lên lư hương

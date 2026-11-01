@@ -195,6 +195,10 @@ function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined
       typeof raw.maxStageCapacity === 'number' && raw.maxStageCapacity >= 1
         ? raw.maxStageCapacity
         : DEFAULT_CONFIG.maxStageCapacity,
+    maxFlyingLotuses:
+      typeof raw.maxFlyingLotuses === 'number' && raw.maxFlyingLotuses >= 0
+        ? raw.maxFlyingLotuses
+        : DEFAULT_CONFIG.maxFlyingLotuses,
     spawnPoint: { ...DEFAULT_CONFIG.spawnPoint, ...(raw.spawnPoint || {}) },
     exitPoint: { ...DEFAULT_CONFIG.exitPoint, ...(raw.exitPoint || {}) },
     incenseBurner: { ...DEFAULT_CONFIG.incenseBurner, ...(raw.incenseBurner || {}) },
@@ -811,39 +815,97 @@ export function useTempleEngine() {
     }, 1000);
   }, []);
 
-  const spawnFlyingLotusToEventBoard = useCallback((startX: number, startY: number) => {
-    const cfg = configRef.current;
-    const targetX = cfg.hudLayout.grandEventBox.x + 24;
-    const targetY = cfg.hudLayout.grandEventBox.y + 30;
-    const id = `fly-lotus-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const activateGrandEventCelebration = useCallback(() => {
+    const until = Date.now() + 10000;
+    setGoldenLotusRainUntil(until);
+    pushFloatingToast('🔔 ĐẠI LỄ VIÊN MÃN! Mưa Hoa Sen Vàng 10s!', true);
+  }, [pushFloatingToast]);
 
-    setFlyingLotuses((prev) => {
-      if (prev.length >= 8) return prev; // Chống quá tải khi bão tim
-      return [...prev, { id, startX, startY, targetX, targetY, createdAt: Date.now() }];
-    });
+  const addGrandEventLotus = useCallback(
+    (amount: number) => {
+      const target = Math.max(1, configRef.current.grandEventTarget || 1000);
+      const nextTotal = grandEventProgressRef.current + Math.max(1, amount);
+      // Kích hoạt nháy viền hồng 1 cái trên thanh đếm ngay thời điểm bông sen chạm thẻ Sự kiện Đại lễ
+      setEventBarFlashKey(Date.now() + Math.random());
 
-    setTimeout(() => {
-      setFlyingLotuses((prev) => prev.filter((f) => f.id !== id));
-    }, 820);
-  }, []);
+      if (nextTotal >= target) {
+        const remainder = nextTotal % target;
+        grandEventProgressRef.current = remainder;
+        setGrandEventProgress(remainder);
+        activateGrandEventCelebration();
+      } else {
+        grandEventProgressRef.current = nextTotal;
+        setGrandEventProgress(nextTotal);
+      }
+    },
+    [activateGrandEventCelebration]
+  );
+
+  const spawnFlyingLotusToEventBoard = useCallback(
+    (startX: number, startY: number, lotusAmount = 0) => {
+      const cfg = configRef.current;
+      const maxFly = Math.max(0, cfg.maxFlyingLotuses ?? 5);
+
+      if (maxFly <= 0) {
+        // Khi giới hạn hoa bay = 0 (Tắt hoa bay): vẫn cộng điểm sau 0.3s nhưng không vẽ hoa bay lên màn hình
+        if (lotusAmount > 0) {
+          setTimeout(() => {
+            addGrandEventLotus(lotusAmount);
+          }, 300);
+        }
+        return;
+      }
+
+      const targetX = cfg.hudLayout.grandEventBox.x + 24;
+      const targetY = cfg.hudLayout.grandEventBox.y + 30;
+      const id = `fly-lotus-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      setFlyingLotuses((prev) => {
+        if (prev.length >= maxFly) return prev; // Giới hạn số hoa sen bay hiển thị cùng lúc
+        return [
+          ...prev,
+          { id, startX, startY, targetX, targetY, createdAt: Date.now() },
+        ];
+      });
+
+      // Khi bông hoa sen bay từ chậm rồi tăng tốc chạm vào thẻ Sự kiện Đại lễ (~1.62s) thì mới cộng điểm & highlight thanh đếm
+      setTimeout(() => {
+        setFlyingLotuses((prev) => prev.filter((f) => f.id !== id));
+        if (lotusAmount > 0) {
+          addGrandEventLotus(lotusAmount);
+        }
+      }, 1620);
+    },
+    [addGrandEventLotus]
+  );
 
   const triggerHeadLotusBurst = useCallback(
-    (username?: string, burstCount = 1) => {
+    (username?: string, burstCount = 1, lotusAmount = 0) => {
       const list = pilgrimsRef.current;
       const now = Date.now();
+      const maxFly = Math.max(0, configRef.current.maxFlyingLotuses ?? 5);
+
+      if (maxFly <= 0) {
+        spawnFlyingLotusToEventBoard(270, 760, lotusAmount);
+        return;
+      }
 
       if (list.length === 0) {
         // Nếu chưa có nhân vật nào trên sân thì vẫn cho 1 hoa sen vừa bay từ thảm đỏ về bảng Đại lễ
-        spawnFlyingLotusToEventBoard(270, 760);
+        spawnFlyingLotusToEventBoard(270, 760, lotusAmount);
         return;
       }
 
       const activeBursts = list.filter(
         (p) => p.lotusBurstUntil && p.lotusBurstUntil > now
       ).length;
-      if (activeBursts >= 8) return;
+      if (activeBursts >= maxFly) {
+        const fallback = list[Math.floor(Math.random() * list.length)];
+        spawnFlyingLotusToEventBoard(fallback.x, fallback.y - 36, lotusAmount);
+        return;
+      }
 
-      const maxNew = Math.min(burstCount, 8 - activeBursts);
+      const maxNew = Math.min(burstCount, maxFly - activeBursts);
       const lowerName = (username || '').trim().toLowerCase();
 
       const candidates: PilgrimData[] = [];
@@ -869,48 +931,21 @@ export function useTempleEngine() {
 
       if (candidates.length > 0) {
         candidates.forEach((p, idx) => {
-          // Bông hoa bay lên với tốc độ nhẹ nhàng (~2.1s)
+          // Bông hoa bay lên trên đầu nhân vật (~2.1s)
           p.lotusBurstUntil = now + 2150;
           p.lotusBurstKey = now + Math.random();
-          // Sau khi bấm like, 1 bông hoa sen kích thước vừa bay (có đuôi ánh hồng) từ nhân vật về nhập vào bảng Sự kiện đại lễ
+          // Bông hoa sen bay từ nhân vật (từ chậm rồi nhanh dần) về chạm vào bảng Sự kiện đại lễ mới highlight thanh đếm
           if (idx === 0) {
-            spawnFlyingLotusToEventBoard(p.x, p.y - 36);
+            spawnFlyingLotusToEventBoard(p.x, p.y - 36, lotusAmount);
           }
         });
         setPilgrims([...list]);
       } else {
         const fallback = list[Math.floor(Math.random() * list.length)];
-        spawnFlyingLotusToEventBoard(fallback.x, fallback.y - 36);
+        spawnFlyingLotusToEventBoard(fallback.x, fallback.y - 36, lotusAmount);
       }
     },
     [spawnFlyingLotusToEventBoard]
-  );
-
-  const activateGrandEventCelebration = useCallback(() => {
-    const until = Date.now() + 3000;
-    setGoldenLotusRainUntil(until);
-    soundEngine.playBell(configRef.current.ttsVolume);
-    pushFloatingToast('🔔 ĐẠI LỄ VIÊN MÃN! Chuông ngân & Mưa Hoa Sen Vàng 3s!', true);
-  }, [pushFloatingToast]);
-
-  const addGrandEventLotus = useCallback(
-    (amount: number) => {
-      const target = Math.max(1, configRef.current.grandEventTarget || 1000);
-      const nextTotal = grandEventProgressRef.current + Math.max(1, amount);
-      // Kích hoạt nháy viền hồng 1 cái trên thanh đếm trong thẻ Sự kiện Đại lễ
-      setEventBarFlashKey(Date.now() + Math.random());
-
-      if (nextTotal >= target) {
-        const remainder = nextTotal % target;
-        grandEventProgressRef.current = remainder;
-        setGrandEventProgress(remainder);
-        activateGrandEventCelebration();
-      } else {
-        grandEventProgressRef.current = nextTotal;
-        setGrandEventProgress(nextTotal);
-      }
-    },
-    [activateGrandEventCelebration]
   );
 
   const addDonorCoins = useCallback((username: string, coins: number) => {
@@ -985,12 +1020,17 @@ export function useTempleEngine() {
       const resolvedAvatarUrl =
         req.avatarUrl || (req.isBot ? pickRandomNpcAvatar() : null);
 
+      const isGiftOffering = req.isVip || req.coins > 0;
+      const cleanPrayer = isGiftOffering ? '' : (req.prayer || '').trim();
+      const shouldShowBubble =
+        !isGiftOffering && !instantKneel && Boolean(cleanPrayer);
+
       return {
         id,
         username: req.username,
-        prayer: req.prayer,
+        prayer: cleanPrayer,
         gender: inferPilgrimGender(req.username, id),
-        isVip: req.isVip || req.coins > 0,
+        isVip: isGiftOffering,
         isBot: req.isBot,
         coins: req.coins,
         offeringType: inferOfferingTypeFromCoins(req.isVip, req.coins),
@@ -1003,7 +1043,7 @@ export function useTempleEngine() {
         laneX,
         slotX: slot ? slot.x : laneX,
         slotY: slot ? slot.y : 598,
-        speed: req.isVip || req.coins > 0 ? 122 : 104 + Math.random() * 18,
+        speed: isGiftOffering ? 122 : 104 + Math.random() * 18,
         state: instantKneel && slot ? 'pray_seated' : 'walk_in_up',
         stateTimer: 1.0,
         prayTimer: finalPrayDuration,
@@ -1014,7 +1054,7 @@ export function useTempleEngine() {
         avatarUrl: resolvedAvatarUrl,
         hairSeed: id,
         hasGoldenAura: req.coins >= 10,
-        chatBubbleUntil: Date.now() + bubbleDurMs,
+        chatBubbleUntil: shouldShowBubble ? Date.now() + bubbleDurMs : 0,
       };
     },
     [pickRandomNpcAvatar]
@@ -1212,15 +1252,6 @@ export function useTempleEngine() {
 
         pushFloatingToast(toastMsg, true, `combo:${lowerName}`);
 
-        // Chống rè loa khi khách bấm 50 hoa hồng liên thanh: chỉ ngân chuông mỗi 900ms hoặc khi vừa đột phá lên mốc 10+ xu
-        if (
-          playSound &&
-          (nowMs - lastBellMsRef.current > 900 || triggerHighTierZoomNow)
-        ) {
-          lastBellMsRef.current = nowMs;
-          soundEngine.playBell(cfg.ttsVolume);
-        }
-
         // Gộp giọng đọc TTS thông minh theo Quy tắc đọc sự kiện (trích ngẫu nhiên mẫu câu từ danh sách mục 2 & 3):
         let ttsTimer: ReturnType<typeof setTimeout> | null = null;
         if (filterRes.allowTTS) {
@@ -1358,6 +1389,32 @@ export function useTempleEngine() {
       const resolvedAvatar =
         avatarUrl || (isBot ? pickRandomNpcAvatar() : null);
 
+      // Nếu nhân vật của người chơi đang trên đường rời phòng (leave_side_to_aisle / leave_down_exit)
+      // mà người chơi lại comment mới hoặc dâng lễ -> thu hồi bóng đang rời đi để cho người chơi bước vào lại phòng cùng comment mới
+      if (!isBot) {
+        let removedLeaving = false;
+        pilgrimsRef.current.forEach((p) => {
+          if (
+            !p.isBot &&
+            p.username.trim().toLowerCase() === lowerName &&
+            (p.state === 'leave_side_to_aisle' || p.state === 'leave_down_exit')
+          ) {
+            releaseSlotById(p.slotId);
+            removedLeaving = true;
+          }
+        });
+        if (removedLeaving) {
+          pilgrimsRef.current = pilgrimsRef.current.filter(
+            (p) =>
+              !(
+                !p.isBot &&
+                p.username.trim().toLowerCase() === lowerName &&
+                (p.state === 'leave_side_to_aisle' || p.state === 'leave_down_exit')
+              )
+          );
+        }
+      }
+
       // Nếu người gửi quà dâng lễ đang nằm trong hàng chờ (khi phòng đầy) -> đẩy ngay lên hàng chờ ưu tiên & cộng dồn combo
       const inQueueIdx = queueRef.current.findIndex(
         (qItem) => qItem.username.trim().toLowerCase() === lowerName
@@ -1365,7 +1422,7 @@ export function useTempleEngine() {
       if (inQueueIdx !== -1 && (isVip || effectiveCoins > 0)) {
         enqueueWithPriority({
           username: finalUsername,
-          prayer: finalPrayer,
+          prayer: '',
           isVip: true,
           coins: Math.max(effectiveCoins, 1),
           avatarUrl: resolvedAvatar,
@@ -1390,7 +1447,7 @@ export function useTempleEngine() {
         }
       }
 
-      // Nếu người chơi đang ở sẵn trên sân chùa và gửi quà Dâng Lễ -> Nâng cấp ngay thành VIP + Cộng dồn Combo mượt mà không giật lùi bước chân
+      // Nếu người chơi đang ở sẵn trên sân chùa và gửi quà Dâng Lễ -> Nâng cấp ngay thành VIP + Cộng dồn Combo mượt mà (Khi dâng lễ không hiện bong bóng chat)
       if (isVip || effectiveCoins > 0) {
         const existingOnStage = pilgrimsRef.current.find(
           (p) =>
@@ -1400,18 +1457,10 @@ export function useTempleEngine() {
             p.state !== 'leave_down_exit'
         );
         if (existingOnStage) {
-          const isAlreadyApproachingBurner =
+          const isAlreadyAtOrWalkingToBurner =
             existingOnStage.state === 'walk_in_up' ||
             existingOnStage.state === 'throw_offering_at_burner' ||
             existingOnStage.state === 'ceremony_at_burner';
-
-          const isMidComboAfterBurner =
-            effectiveComboCount > 1 &&
-            (existingOnStage.state === 'walk_to_vip_check' ||
-              existingOnStage.state === 'wait_for_vip_slot' ||
-              existingOnStage.state === 'walk_side_to_slot' ||
-              existingOnStage.state === 'walk_vert_to_slot') &&
-            existingOnStage.isVip;
 
           existingOnStage.isVip = true;
           existingOnStage.isBot = false;
@@ -1420,27 +1469,21 @@ export function useTempleEngine() {
           existingOnStage.comboCount = effectiveComboCount;
           existingOnStage.giftName = effectiveGiftName;
           existingOnStage.comboPopKey = nowMs + Math.random();
-          existingOnStage.prayer = finalPrayer;
           if (resolvedAvatar) existingOnStage.avatarUrl = resolvedAvatar;
           existingOnStage.hasGoldenAura =
             Boolean(existingOnStage.hasGoldenAura) || effectiveCoins >= 10;
-          existingOnStage.chatBubbleUntil =
-            nowMs + Math.max(2, cfg.chatBubbleDurationSec || 12) * 1000;
+          // Khi dâng lễ: tắt bong bóng chat để chỉ hiển thị lễ vật dâng lên và huy hiệu combo
+          existingOnStage.chatBubbleUntil = 0;
           existingOnStage.speed = 122;
 
-          if (isAlreadyApproachingBurner) {
+          if (isAlreadyAtOrWalkingToBurner) {
             if (existingOnStage.state === 'ceremony_at_burner') {
-              setLatestAltarOffering(offeringType);
-              if (effectiveComboCount % 5 === 0 || triggerHighTierZoomNow) {
-                spawnBurnerLotusBurst(cfg.incenseBurner.x, cfg.incenseBurner.y);
-              }
-            }
-          } else if (isMidComboAfterBurner) {
-            setLatestAltarOffering(offeringType);
-            if (effectiveComboCount % 5 === 0 || triggerHighTierZoomNow) {
-              spawnBurnerLotusBurst(cfg.incenseBurner.x, cfg.incenseBurner.y);
+              // Nếu đang đứng ngay trước lư hương thắp nhang mà dâng tiếp quà -> thực hiện động tác ném lễ vật vào lư hương
+              existingOnStage.state = 'throw_offering_at_burner';
+              existingOnStage.stateTimer = 0.55;
             }
           } else {
+            // Bắt buộc phải rời khỏi chỗ ngồi / đường đi hiện tại để di chuyển ra thảm đỏ và đi đến trước lư hương mới được dâng lễ
             releaseSlotById(existingOnStage.slotId);
             existingOnStage.slotId = null;
             existingOnStage.state = 'walk_in_up';
@@ -1463,20 +1506,26 @@ export function useTempleEngine() {
         (p) => p.state !== 'leave_side_to_aisle' && p.state !== 'leave_down_exit'
       ).length;
 
-      // Xử lý cho Khách Dâng Lễ (isVip || effectiveCoins > 0)
+      // Xử lý cho Khách Dâng Lễ (isVip || effectiveCoins > 0) — Khi dâng lễ không cần hiện bong bóng chat
       if (isVip || effectiveCoins > 0) {
         if (activeStageCount >= maxStageCapacity && !isBot) {
           const botToYield =
             pilgrimsRef.current.find(
               (p) => p.isBot && p.state === 'pray_seated' && p.isVip
             ) ||
-            pilgrimsRef.current.find((p) => p.isBot && p.state === 'pray_seated');
+            pilgrimsRef.current.find((p) => p.isBot && p.state === 'pray_seated') ||
+            pilgrimsRef.current.find(
+              (p) =>
+                p.isBot &&
+                p.state !== 'leave_side_to_aisle' &&
+                p.state !== 'leave_down_exit'
+            );
           if (botToYield) {
             startPilgrimLeaving(botToYield);
           } else {
             enqueueWithPriority({
               username: finalUsername,
-              prayer: finalPrayer,
+              prayer: '',
               isVip: true,
               coins: Math.max(effectiveCoins, 1),
               avatarUrl: resolvedAvatar,
@@ -1493,7 +1542,7 @@ export function useTempleEngine() {
         const newVipPilgrim = createPilgrimInstance(
           {
             username: finalUsername,
-            prayer: finalPrayer,
+            prayer: '',
             isVip: true,
             coins: Math.max(effectiveCoins, 1),
             avatarUrl: resolvedAvatar,
@@ -1518,7 +1567,13 @@ export function useTempleEngine() {
         return;
       }
 
-      // Nếu khách bình luận thường đang ở sẵn trên sân -> cập nhật bong bóng chat lời ước nguyện mới
+      // Nếu người chơi đang nằm trong hàng chờ mà lại comment mới -> rút khỏi hàng chờ để cập nhật hoặc cho vào sân ngay
+      if (!isBot && inQueueIdx !== -1) {
+        queueRef.current.splice(inQueueIdx, 1);
+        setQueueCount(queueRef.current.length);
+      }
+
+      // Nếu người chơi đang ở sẵn trên sân (dù đang ngồi chiếu thường hay ghế VIP) -> đồng bộ ngay comment mới lên bong bóng chat & gia hạn thời gian ngồi
       const existingNormal = pilgrimsRef.current.find(
         (p) =>
           p.isBot === isBot &&
@@ -1531,16 +1586,27 @@ export function useTempleEngine() {
         if (resolvedAvatar) existingNormal.avatarUrl = resolvedAvatar;
         existingNormal.chatBubbleUntil =
           Date.now() + Math.max(2, cfg.chatBubbleDurationSec || 12) * 1000;
+        const freshDur = Math.max(3, cfg.prayDurationSec);
+        existingNormal.prayTimer = freshDur;
+        existingNormal.totalPrayDuration = freshDur;
         setPilgrims([...pilgrimsRef.current]);
         return;
       }
 
-      // Kiểm tra nếu sân đã đạt tối đa số Phật tử cho phép vào sân (maxStageCapacity)
+      // Nếu nhân vật người chơi đã rời phòng (hoặc người chơi mới comment) -> cho người chơi vào lại phòng cùng comment mới vừa thêm
       if (activeStageCount >= maxStageCapacity) {
         if (isBot) return;
-        const botToYieldForCap = pilgrimsRef.current.find(
-          (p) => p.isBot && p.state === 'pray_seated'
-        );
+        const botToYieldForCap =
+          pilgrimsRef.current.find(
+            (p) => p.isBot && !p.isVip && p.state === 'pray_seated'
+          ) ||
+          pilgrimsRef.current.find((p) => p.isBot && p.state === 'pray_seated') ||
+          pilgrimsRef.current.find(
+            (p) =>
+              p.isBot &&
+              p.state !== 'leave_side_to_aisle' &&
+              p.state !== 'leave_down_exit'
+          );
         if (botToYieldForCap) {
           startPilgrimLeaving(botToYieldForCap);
         } else {
@@ -1556,15 +1622,24 @@ export function useTempleEngine() {
         }
       }
 
-      // Xử lý cho Khách Thường (Mới vào live / Bình luận ước nguyện / NPC giữ nhiệt)
+      // Xử lý cho Khách Thường (Mới vào live / Bình luận ước nguyện / Vào lại phòng sau khi rời đi / NPC giữ nhiệt)
       let freeNormalSlots = normalSlotsRef.current.filter(
         (s) => s.occupiedById === null
       );
 
       if (freeNormalSlots.length === 0 && !isBot) {
-        const botToYield = pilgrimsRef.current.find(
-          (p) => p.isBot && p.state === 'pray_seated' && !p.isVip
-        );
+        const botToYield =
+          pilgrimsRef.current.find(
+            (p) => p.isBot && !p.isVip && p.state === 'pray_seated' && p.slotId
+          ) ||
+          pilgrimsRef.current.find(
+            (p) =>
+              p.isBot &&
+              !p.isVip &&
+              p.slotId &&
+              p.state !== 'leave_side_to_aisle' &&
+              p.state !== 'leave_down_exit'
+          );
         if (botToYield && botToYield.slotId) {
           const freedSlot = normalSlotsRef.current.find(
             (s) => s.id === botToYield.slotId
@@ -1591,9 +1666,9 @@ export function useTempleEngine() {
         );
         pilgrimsRef.current = [...pilgrimsRef.current, newNormalPilgrim];
         setPilgrims(pilgrimsRef.current);
-      } else if (isBot && normalSlotsRef.current.length > 0) {
-        // Khi số Phật tử duy trì giữ nhiệt (botTargetCrowd) cao hơn số chiếu trống hiện tại:
-        // Cho phép xếp thêm vào vị trí chiếu với độ lệch nhỏ để đảm bảo đủ đúng số lượng duy trì trên sân (trong giới hạn maxStageCapacity)
+      } else if (normalSlotsRef.current.length > 0) {
+        // Khi số người trong phòng cao hơn số chiếu trống hiện tại (nhưng vẫn còn sức chứa maxStageCapacity):
+        // Cho phép cả Người thật và NPC bước vào sân ngồi với độ lệch nhỏ để người chơi comment luôn vào được phòng ngay
         const baseSlot =
           normalSlotsRef.current[
             Math.floor(Math.random() * normalSlotsRef.current.length)
@@ -1605,7 +1680,7 @@ export function useTempleEngine() {
             isVip: false,
             coins: 0,
             avatarUrl: resolvedAvatar,
-            isBot: true,
+            isBot,
           },
           null,
           false
@@ -1698,7 +1773,15 @@ export function useTempleEngine() {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!controlledTargetRef.current || isTypingInput(e.target)) return;
       const key = e.key.toLowerCase();
+      if (e.shiftKey || key === 'shift') {
+        pressedKeysRef.current['shift'] = true;
+      } else {
+        delete pressedKeysRef.current['shift'];
+      }
       if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+        if (key.startsWith('arrow')) {
+          e.preventDefault();
+        }
         pressedKeysRef.current[key] = true;
       } else if (key === 'q') {
         e.preventDefault();
@@ -1709,6 +1792,9 @@ export function useTempleEngine() {
     const handleKeyUp = (e: KeyboardEvent) => {
       const key = e.key.toLowerCase();
       delete pressedKeysRef.current[key];
+      if (key === 'shift' || !e.shiftKey) {
+        delete pressedKeysRef.current['shift'];
+      }
     };
 
     const handleBlur = () => {
@@ -1780,6 +1866,7 @@ export function useTempleEngine() {
       const moveDown = Boolean(keys['s'] || keys['arrowdown']);
       const moveLeft = Boolean(keys['a'] || keys['arrowleft']);
       const moveRight = Boolean(keys['d'] || keys['arrowright']);
+      const isSlowWalk = Boolean(keys['shift']);
 
       // 0. Nhịp gõ chuông & gõ mõ định kỳ theo khoảng cách thời gian cài đặt
       if (cfg.bellEnabled && cfg.bellIntervalSec > 0) {
@@ -1804,8 +1891,9 @@ export function useTempleEngine() {
 
       // 1. Update Monks (Trụ trì & Chú tiểu) inside dynamic cfg.monkZone (or manual AWSD control)
       const nextMonks = monksRef.current.map((m) => {
-        const copy = { ...m, animTime: m.animTime + dt };
-        const isControlledMonk = activeControl === `monk:${copy.id}`;
+        const isControlledMonk = activeControl === `monk:${m.id}`;
+        const animRate = isControlledMonk && !isSlowWalk ? 1.45 : 1.0;
+        const copy = { ...m, animTime: m.animTime + dt * animRate };
 
         // Đồng bộ live text vào bong bóng chat trên đầu Sư Trụ Trì khi đang đọc TTS / Thuyết pháp
         if (copy.role === 'abbot') {
@@ -1823,7 +1911,8 @@ export function useTempleEngine() {
         }
 
         if (isControlledMonk) {
-          const manualSpeed = 115;
+          // Giữ Shift để đi chậm = đúng tốc độ đi bình thường của Sư Trụ Trì / Chú Tiểu khi không bị điều khiển (copy.speed: 38..48)
+          const manualSpeed = isSlowWalk ? copy.speed : 115;
           let vx = 0;
           let vy = 0;
           if (moveLeft) vx -= 1;
@@ -1832,15 +1921,20 @@ export function useTempleEngine() {
           if (moveDown) vy += 1;
 
           if (vx !== 0 || vy !== 0) {
-            copy.x = Math.max(25, Math.min(515, copy.x + vx * manualSpeed * dt));
-            copy.y = Math.max(430, Math.min(945, copy.y + vy * manualSpeed * dt));
-            copy.targetX = copy.x;
-            copy.targetY = copy.y + vy * 10;
+            const len = Math.hypot(vx, vy) || 1;
+            const nx = vx / len;
+            const ny = vy / len;
+            copy.x = Math.max(25, Math.min(515, copy.x + nx * manualSpeed * dt));
+            copy.y = Math.max(430, Math.min(945, copy.y + ny * manualSpeed * dt));
             if (vx !== 0) {
               copy.facingLeft = vx < 0;
               copy.moveAxis = 'x';
+              copy.targetX = copy.x + vx * 10;
+              copy.targetY = copy.y;
             } else {
               copy.moveAxis = 'y';
+              copy.targetX = copy.x;
+              copy.targetY = copy.y + vy * 10;
             }
           } else if (
             copy.woodenFishRippleUntil &&
@@ -1916,8 +2010,9 @@ export function useTempleEngine() {
         Math.max(490, cfg.redPrayZones.left.minY - 46);
 
       for (const p of pilgrimsRef.current) {
-        const copy = { ...p, animTime: p.animTime + dt };
-        const isControlledPilgrim = activeControl === `pilgrim:${copy.id}`;
+        const isControlledPilgrim = activeControl === `pilgrim:${p.id}`;
+        const pilgrimAnimRate = isControlledPilgrim && isSlowWalk ? 0.85 : 1.0;
+        const copy = { ...p, animTime: p.animTime + dt * pilgrimAnimRate };
 
         if (isControlledPilgrim) {
           if (copy.slotId) {
@@ -1925,7 +2020,8 @@ export function useTempleEngine() {
             copy.slotId = null;
           }
           copy.state = 'manual_control';
-          const manualSpeed = 120;
+          // Giữ Shift để đi chậm = tốc độ đi bình thường của Chú Tiểu & Sư Trụ Trì khi không bị điều khiển (~44 px/s)
+          const manualSpeed = isSlowWalk ? 44 : 120;
           let vx = 0;
           let vy = 0;
           if (moveLeft) vx -= 1;
@@ -1934,8 +2030,11 @@ export function useTempleEngine() {
           if (moveDown) vy += 1;
 
           if (vx !== 0 || vy !== 0) {
-            copy.x = Math.max(25, Math.min(515, copy.x + vx * manualSpeed * dt));
-            copy.y = Math.max(470, Math.min(948, copy.y + vy * manualSpeed * dt));
+            const len = Math.hypot(vx, vy) || 1;
+            const nx = vx / len;
+            const ny = vy / len;
+            copy.x = Math.max(25, Math.min(515, copy.x + nx * manualSpeed * dt));
+            copy.y = Math.max(470, Math.min(948, copy.y + ny * manualSpeed * dt));
             if (vx !== 0) {
               copy.facingLeft = vx < 0;
               copy.manualMoveDir = vx < 0 ? 'left' : 'right';
@@ -1961,24 +2060,27 @@ export function useTempleEngine() {
 
         if (copy.state === 'walk_in_up') {
           const dx = copy.laneX - copy.x;
-          if (Math.abs(dx) > 2) {
+          const dy = ceremonyY - copy.y;
+
+          // Nếu nhân vật đang ở 2 bên cánh (vừa từ chỗ ngồi bước ra để đi dâng lễ):
+          // Phải đi ngang vào làn thảm đỏ chính giữa trước, sau đó đi dọc đến ngay trước lư hương rồi mới được dâng lễ
+          if (Math.abs(dx) > 4) {
+            copy.facingLeft = dx < 0;
             copy.x += Math.sign(dx) * Math.min(Math.abs(dx), copy.speed * dt);
           } else {
             copy.x = copy.laneX;
-          }
-
-          const dy = ceremonyY - copy.y;
-          if (Math.abs(dy) <= 4) {
-            copy.y = ceremonyY;
-            if (copy.isVip || copy.coins > 0) {
-              copy.state = 'throw_offering_at_burner';
-              copy.stateTimer = 0.55;
+            if (Math.abs(dy) <= 4) {
+              copy.y = ceremonyY;
+              if (copy.isVip || copy.coins > 0) {
+                copy.state = 'throw_offering_at_burner';
+                copy.stateTimer = 0.55;
+              } else {
+                copy.state = 'ceremony_at_burner';
+                copy.stateTimer = 1.2;
+              }
             } else {
-              copy.state = 'ceremony_at_burner';
-              copy.stateTimer = 1.2;
+              copy.y += Math.sign(dy) * Math.min(Math.abs(dy), copy.speed * dt);
             }
-          } else {
-            copy.y += Math.sign(dy) * Math.min(Math.abs(dy), copy.speed * dt);
           }
         } else if (copy.state === 'throw_offering_at_burner') {
           copy.stateTimer -= dt;
@@ -2341,7 +2443,6 @@ export function useTempleEngine() {
           break;
         case 'SPAWN_BATCH': {
           const count = payload.count || 15;
-          soundEngine.playBell(configRef.current.ttsVolume);
           for (let i = 0; i < count; i++) {
             setTimeout(() => {
               const username = pickRandomNpcName();
@@ -2455,14 +2556,16 @@ export function useTempleEngine() {
         case 'TRIGGER_LIKE': {
           const count = Number(payload.count) || 1;
           const uname = payload.username || '';
-          addGrandEventLotus(count);
-          triggerHeadLotusBurst(uname, count >= 50 ? 4 : count >= 10 ? 2 : 1);
+          triggerHeadLotusBurst(
+            uname,
+            count >= 50 ? 4 : count >= 10 ? 2 : 1,
+            count
+          );
           break;
         }
         case 'TRIGGER_FOLLOW': {
           const uname = payload.username || 'Phật tử mới';
-          addGrandEventLotus(100);
-          triggerHeadLotusBurst(uname, 2);
+          triggerHeadLotusBurst(uname, 2, 100);
           pushFloatingToast(`🌸 ${uname} vừa Follow (+100 Hoa Sen Đại Lễ)`, true);
           break;
         }
@@ -2553,9 +2656,10 @@ export function useTempleEngine() {
       }
 
       if (ev.type === 'chat') {
+        const commentText = (ev.comment || '').trim();
         requestSpawnPilgrim({
           username: ev.username || 'Phật tử',
-          prayer: ev.comment || 'Nam Mô A Di Đà Phật',
+          prayer: commentText || 'Nam Mô A Di Đà Phật 🙏',
           isVip: false,
           coins: 0,
           playSound: true,
@@ -2566,7 +2670,7 @@ export function useTempleEngine() {
       } else if (ev.type === 'gift') {
         requestSpawnPilgrim({
           username: ev.username || 'Đại thí chủ',
-          prayer: `Thành tâm dâng lễ ${ev.giftName || 'Vật phẩm'} 🙏`,
+          prayer: '',
           isVip: true,
           coins: ev.coins || 1,
           giftName: ev.giftName || 'Lễ vật',
@@ -2577,12 +2681,10 @@ export function useTempleEngine() {
         });
       } else if (ev.type === 'like') {
         const count = Math.max(1, Number(ev.likeCount) || 1);
-        addGrandEventLotus(count);
-        triggerHeadLotusBurst(ev.username, count >= 30 ? 3 : 1);
+        triggerHeadLotusBurst(ev.username, count >= 30 ? 3 : 1, count);
       } else if (ev.type === 'follow') {
         const uname = ev.username || 'Phật tử mới';
-        addGrandEventLotus(100);
-        triggerHeadLotusBurst(uname, 2);
+        triggerHeadLotusBurst(uname, 2, 100);
         pushFloatingToast(`🌸 ${uname} vừa Follow (+100 Hoa Sen Đại Lễ)`, true);
       }
     });
@@ -2794,7 +2896,6 @@ export function useTempleEngine() {
   const handleSpawnBatch = useCallback(
     (count = 15) => {
       syncService.sendCommand('SPAWN_BATCH', { count });
-      soundEngine.playBell(configRef.current.ttsVolume);
       for (let i = 0; i < count; i++) {
         setTimeout(() => {
           const username = pickRandomNpcName();
@@ -3306,21 +3407,23 @@ export function useTempleEngine() {
   const handleTriggerLike = useCallback(
     (count = 1, username?: string) => {
       syncService.sendCommand('TRIGGER_LIKE', { count, username });
-      addGrandEventLotus(count);
-      triggerHeadLotusBurst(username, count >= 50 ? 4 : count >= 10 ? 2 : 1);
+      triggerHeadLotusBurst(
+        username,
+        count >= 50 ? 4 : count >= 10 ? 2 : 1,
+        count
+      );
     },
-    [addGrandEventLotus, triggerHeadLotusBurst]
+    [triggerHeadLotusBurst]
   );
 
   const handleTriggerFollow = useCallback(
     (username?: string) => {
       const uname = username || pickRandomNpcName();
       syncService.sendCommand('TRIGGER_FOLLOW', { username: uname });
-      addGrandEventLotus(100);
-      triggerHeadLotusBurst(uname, 2);
+      triggerHeadLotusBurst(uname, 2, 100);
       pushFloatingToast(`🌸 ${uname} vừa Follow (+100 Hoa Sen Đại Lễ)`, true);
     },
-    [addGrandEventLotus, pickRandomNpcName, pushFloatingToast, triggerHeadLotusBurst]
+    [pickRandomNpcName, pushFloatingToast, triggerHeadLotusBurst]
   );
 
   const handleTriggerGrandEvent = useCallback(() => {

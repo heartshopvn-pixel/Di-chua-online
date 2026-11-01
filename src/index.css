@@ -196,33 +196,65 @@
   animation: burnerLotusExplode 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Hoa sen kích thước vừa bay kèm đuôi ánh hồng về nhập vào bảng Sự kiện Đại lễ */
+/* Hoa sen kích thước vừa bay từ chậm rồi tăng tốc dần về nhập vào bảng Sự kiện Đại lễ */
 @keyframes flyingLotusToBoard {
   0% {
-    transform: translate(-50%, -50%) scale(0.75);
-    opacity: 0.95;
+    transform: translate(-50%, -50%) scale(0.65);
+    opacity: 0;
   }
-  20% {
+  12% {
     transform: translate(
-      calc(-50% + var(--dx, 0px) * 0.2 - 18px),
-      calc(-50% + var(--dy, 0px) * 0.2 - 24px)
-    ) scale(1.15);
+      calc(-50% + var(--dx, 0px) * 0.02),
+      calc(-50% + var(--dy, 0px) * 0.02 - 10px)
+    ) scale(0.95);
     opacity: 1;
   }
-  85% {
+  30% {
+    transform: translate(
+      calc(-50% + var(--dx, 0px) * 0.08 - 8px),
+      calc(-50% + var(--dy, 0px) * 0.08 - 18px)
+    ) scale(1.08);
     opacity: 1;
+  }
+  50% {
+    transform: translate(
+      calc(-50% + var(--dx, 0px) * 0.22 - 10px),
+      calc(-50% + var(--dy, 0px) * 0.22 - 14px)
+    ) scale(1.12);
+    opacity: 1;
+  }
+  70% {
+    transform: translate(
+      calc(-50% + var(--dx, 0px) * 0.48 - 6px),
+      calc(-50% + var(--dy, 0px) * 0.48 - 6px)
+    ) scale(1.04);
+    opacity: 1;
+  }
+  86% {
+    transform: translate(
+      calc(-50% + var(--dx, 0px) * 0.78),
+      calc(-50% + var(--dy, 0px) * 0.78)
+    ) scale(0.9);
+    opacity: 1;
+  }
+  96% {
+    transform: translate(
+      calc(-50% + var(--dx, 0px) * 0.96),
+      calc(-50% + var(--dy, 0px) * 0.96)
+    ) scale(0.75);
+    opacity: 0.95;
   }
   100% {
     transform: translate(
       calc(-50% + var(--dx, 0px)),
       calc(-50% + var(--dy, 0px))
-    ) scale(0.55);
+    ) scale(0.5);
     opacity: 0;
   }
 }
 
 .flying-lotus-projectile {
-  animation: flyingLotusToBoard 0.78s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: flyingLotusToBoard 1.65s linear forwards;
 }
 
 

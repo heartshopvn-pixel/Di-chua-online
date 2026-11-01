@@ -146,7 +146,10 @@ export function scanTextViolation(
         return { violated: true, reason: 'Từ cấm (viết liền)', matchedWord: word };
       }
     } else {
-      const boundaryRegex = new RegExp(`(^|[^a-zA-Z0-9À-ỹ])${escaped}([^a-zA-Z0-9À-ỹ]|$)`, 'i');
+      const boundaryRegex = new RegExp(
+        `(^|[^\\p{L}\\p{N}])${escaped}([^\\p{L}\\p{N}]|$)`,
+        'iu'
+      );
       if (boundaryRegex.test(collapsed) || boundaryRegex.test(lower)) {
         return { violated: true, reason: 'Từ cấm', matchedWord: word };
       }

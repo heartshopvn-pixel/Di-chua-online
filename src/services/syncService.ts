@@ -215,6 +215,51 @@ class LiveSyncService {
         return null;
       };
 
+      const extractUsername = (obj: any): string => {
+        if (!obj || typeof obj !== 'object') return 'Phật Tử';
+        const d = obj.data || obj.raw || obj;
+        const u = obj.user || obj.userDetails || d?.user || d?.userDetails || d;
+        const candidates = [
+          obj.username !== 'Phật Tử' ? obj.username : null,
+          obj.nickname,
+          obj.displayId,
+          obj.uniqueId,
+          u?.nickname,
+          u?.displayId,
+          u?.uniqueId,
+          u?.username,
+          d?.nickname,
+          d?.displayId,
+          d?.uniqueId,
+          obj.username,
+        ];
+        for (const c of candidates) {
+          if (typeof c === 'string' && c.trim()) return c.trim();
+        }
+        return 'Phật Tử';
+      };
+
+      const extractComment = (obj: any): string => {
+        if (!obj || typeof obj !== 'object') return '';
+        const d = obj.data || obj.raw || obj;
+        const candidates = [
+          obj.comment,
+          obj.content,
+          obj.text,
+          obj.message,
+          obj.prayer,
+          d?.comment,
+          d?.content,
+          d?.text,
+          d?.message,
+          d?.common?.displayText?.defaultPattern,
+        ];
+        for (const c of candidates) {
+          if (typeof c === 'string' && c.trim()) return c.trim();
+        }
+        return '';
+      };
+
       socket.onmessage = (event) => {
         try {
           const raw = JSON.parse(event.data);
@@ -226,27 +271,31 @@ class LiveSyncService {
           // Format 1: Custom Node.js server.js bridge ({ type: 'chat' | 'gift' | 'like' | 'follow', ... })
           if (
             raw.type === 'chat' ||
+            raw.type === 'comment' ||
             raw.type === 'gift' ||
             raw.type === 'like' ||
             raw.type === 'follow'
           ) {
+            const normalizedType = raw.type === 'comment' ? 'chat' : raw.type;
             const normalized = {
               ...raw,
-              avatarUrl: extractAvatar(raw),
+              type: normalizedType,
+              username: extractUsername(raw),
+              avatarUrl: extractAvatar(raw) || extractAvatar(raw.raw),
+              comment: extractComment(raw),
             };
             this.tiktokListeners.forEach((fn) => fn(normalized));
             return;
           }
 
           // Format 2: Direct TikFinity WebSocket (ws://localhost:21213) ({ event: 'chat' | 'gift' | 'like' | 'follow', data: {...} })
-          const evType = raw.event;
+          const rawEv = raw.event === 'comment' ? 'chat' : raw.event;
           const d = raw.data || {};
-          if (evType === 'chat' || evType === 'gift' || evType === 'like' || evType === 'follow') {
-            if (evType === 'gift' && d.giftType === 1 && d.repeatEnd === false) {
+          if (rawEv === 'chat' || rawEv === 'gift' || rawEv === 'like' || rawEv === 'follow') {
+            if (rawEv === 'gift' && d.giftType === 1 && d.repeatEnd === false) {
               return;
             }
-            const username =
-              d.nickname || d.user?.nickname || d.uniqueId || d.user?.uniqueId || 'Phật Tử';
+            const username = extractUsername(raw);
             const avatarUrl = extractAvatar(d) || extractAvatar(raw);
             const diamondCount =
               d.diamondCount ??
@@ -257,10 +306,10 @@ class LiveSyncService {
 
             this.tiktokListeners.forEach((fn) =>
               fn({
-                type: evType,
+                type: rawEv,
                 username,
                 avatarUrl,
-                comment: d.comment || '',
+                comment: extractComment(raw),
                 giftName:
                   d.giftName || d.giftDetails?.giftName || d.gift?.name || 'Lễ vật',
                 coins: Math.max(1, Number(diamondCount) * Number(repeatCount)),

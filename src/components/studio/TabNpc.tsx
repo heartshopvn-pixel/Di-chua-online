@@ -195,7 +195,8 @@ export const TabNpc: React.FC<TabNpcProps> = ({
         <p className="text-[11px] text-amber-200/75 leading-relaxed">
           Chọn <strong className="text-cyan-300">Sư Trụ Trì, Chú Tiểu</strong> hoặc bất kỳ{' '}
           <strong className="text-cyan-300">NPC</strong> nào đang trên sân để trực tiếp điều khiển:
-          bấm <kbd className="px-1.5 py-0.5 bg-black/60 border border-cyan-500/40 rounded text-cyan-300 font-mono text-[10px]">W A S D</kbd> để di chuyển,{' '}
+          bấm <kbd className="px-1.5 py-0.5 bg-black/60 border border-cyan-500/40 rounded text-cyan-300 font-mono text-[10px]">W A S D</kbd> để di chuyển, giữ{' '}
+          <kbd className="px-1.5 py-0.5 bg-black/60 border border-emerald-500/40 rounded text-emerald-300 font-mono text-[10px]">Shift</kbd> để <strong className="text-emerald-300">đi chậm</strong> (= tốc độ đi bình thường của Chú Tiểu & Sư Trụ Trì khi không bị điều khiển), bấm{' '}
           <kbd className="px-1.5 py-0.5 bg-black/60 border border-amber-500/40 rounded text-amber-300 font-mono text-[10px]">Q</kbd> để gõ mõ, và nhập chat bên dưới.
         </p>
 

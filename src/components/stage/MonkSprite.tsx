@@ -33,10 +33,12 @@ export function getMonkFrameIndex(m: TempleMonkData): MonkFrameIndex {
   }
 
   if (m.moveAxis === 'idle') {
+    if (m.targetY > m.y + 1) return 0;
+    if (m.targetY < m.y - 1) return 2;
     return 4;
   }
 
-  const stepToggle = Math.floor(m.animTime * 4.2) % 2 === 0;
+  const stepToggle = Math.floor(m.animTime * 4.5) % 2 === 0;
   if (m.moveAxis === 'x') {
     return stepToggle ? 4 : 5;
   }

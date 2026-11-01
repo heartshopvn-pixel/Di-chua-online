@@ -75,7 +75,7 @@ export const TabControl: React.FC<TabControlProps> = ({
   const [customPrayer, setCustomPrayer] = useState(
     'Cầu cho năm nay gia đình bình an, vạn sự hanh thông ạ'
   );
-  const [customVip, setCustomVip] = useState(true);
+  const [customVip, setCustomVip] = useState(false);
   const [customCoins, setCustomCoins] = useState(10);
   const [customAvatarUrl, setCustomAvatarUrl] = useState<string | null>(null);
   const [backupMsg, setBackupMsg] = useState<{ ok: boolean; text: string } | null>(
@@ -101,7 +101,7 @@ export const TabControl: React.FC<TabControlProps> = ({
     e.preventDefault();
     onSpawnCustom(
       customName.trim() || 'Phật Tử Ẩn Danh',
-      customPrayer.trim() || 'Nam Mô A Di Đà Phật 🙏',
+      customVip ? '' : customPrayer.trim() || 'Nam Mô A Di Đà Phật 🙏',
       customVip,
       customVip ? Math.max(1, customCoins) : 0,
       customAvatarUrl
@@ -760,6 +760,70 @@ export const TabControl: React.FC<TabControlProps> = ({
               <Bell className="w-3 h-3" />
               <span>Nổ Đại Lễ</span>
             </button>
+          </div>
+
+          {/* Giới hạn số hoa sen bay hiển thị cùng lúc khi có người thả tim */}
+          <div className="p-2.5 rounded-lg bg-stone-950/90 border border-pink-500/30 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-bold text-pink-200">
+                  🌸 Giới hạn số hoa sen bay hiển thị khi Thả Tim
+                </div>
+                <div className="text-[10px] text-stone-400">
+                  Tránh lag/rối mắt khi quá nhiều người thả tim cùng lúc (điểm tim vẫn cộng đủ)
+                </div>
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <input
+                  type="number"
+                  min={0}
+                  max={30}
+                  value={config.maxFlyingLotuses ?? 5}
+                  onChange={(e) =>
+                    onUpdateConfig({
+                      maxFlyingLotuses: Math.max(
+                        0,
+                        Math.min(30, parseInt(e.target.value, 10) || 0)
+                      ),
+                    })
+                  }
+                  className="w-12 px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-xs font-mono font-bold text-pink-300 text-right"
+                />
+                <span className="text-[11px] font-mono text-pink-300">bông</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 shrink-0">
+                {[0, 1, 3, 5, 8, 15].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => onUpdateConfig({ maxFlyingLotuses: num })}
+                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                      (config.maxFlyingLotuses ?? 5) === num
+                        ? 'bg-pink-500 text-stone-950 font-bold'
+                        : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                    }`}
+                  >
+                    {num === 0 ? 'Tắt (0)' : num}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={20}
+                step={1}
+                value={Math.min(20, Math.max(0, config.maxFlyingLotuses ?? 5))}
+                onChange={(e) =>
+                  onUpdateConfig({
+                    maxFlyingLotuses: Math.max(0, parseInt(e.target.value, 10) || 0),
+                  })
+                }
+                className="flex-1 accent-pink-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+              />
+            </div>
           </div>
         </div>
 
