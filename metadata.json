@@ -1,0 +1,6 @@
+{
+  "name": "Đi Chùa Online - TikTok Live 2.5D & Dev Studio",
+  "description": "Game tương tác TikTok Live 2.5D Chánh Điện Cầu An tích hợp bảng điều khiển Dev Studio, đọc tên đa nguồn TTS, bộ lọc từ cấm và đồng bộ OBS.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

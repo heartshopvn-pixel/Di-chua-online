@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="vi" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function () {
+        try {
+          var currentFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get: function () {
+              return currentFetch;
+            },
+            set: function (fn) {
+              currentFetch = fn;
+            }
+          });
+        } catch (e) {}
+
+        window.addEventListener(
+          'error',
+          function (event) {
+            if (
+              event &&
+              ((event.filename && event.filename.indexOf('chrome-extension://') === 0) ||
+                (event.message && event.message.indexOf('Cannot set property fetch') !== -1))
+            ) {
+              event.stopImmediatePropagation();
+              event.preventDefault();
+            }
+          },
+          true
+        );
+      })();
+    </script>
+    <title>Đi Chùa Online - TikTok Live 2.5D & Dev Studio</title>
+    <meta name="description" content="Game tương tác TikTok Live 2.5D Chánh Điện Cầu An tích hợp bảng điều khiển Dev Studio, đọc tên đa nguồn TTS, bộ lọc từ cấm và đồng bộ OBS." />
+    <meta property="og:title" content="Đi Chùa Online - TikTok Live 2.5D & Dev Studio" />
+    <meta property="og:description" content="Game tương tác TikTok Live 2.5D Chánh Điện Cầu An tích hợp bảng điều khiển Dev Studio, đọc tên đa nguồn TTS, bộ lọc từ cấm và đồng bộ OBS." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  </head>
+  <body class="bg-stone-950 text-stone-100 antialiased selection:bg-amber-500 selection:text-stone-950 overflow-hidden">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+

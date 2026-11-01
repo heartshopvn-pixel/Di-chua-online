@@ -1,0 +1,2659 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đi Chùa Online - TikTok Live Game & Dev Studio</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            font-family: 'Be Vietnam Pro', sans-serif;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #0c0a09;
+            color: #fafaf9;
+            overflow: hidden;
+        }
+        /* Tùy chỉnh thanh cuộn cho bảng Dev */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1c1917;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #57534e;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d97706;
+        }
+
+        /* Khung Chánh Điện chuẩn 9:16 (540x960) tự co giãn vừa màn hình */
+        #game-viewport {
+            width: 540px;
+            height: 960px;
+            position: relative;
+            overflow: hidden;
+            background: radial-gradient(circle at 50% 22%, #78350f 0%, #451a03 42%, #1c1917 100%);
+            box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(245, 158, 11, 0.3);
+            transform-origin: center center;
+        }
+
+        /* Ánh sáng hào quang Phật */
+        .buddha-aura {
+            position: absolute;
+            top: 45px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(253, 224, 71, 0.55) 0%, rgba(245, 158, 11, 0.25) 45%, rgba(245, 158, 11, 0) 72%);
+            filter: blur(8px);
+            animation: auraPulse 4s ease-in-out infinite;
+            pointer-events: none;
+        }
+        @keyframes auraPulse {
+            0%, 100% { transform: translateX(-50%) scale(0.96); opacity: 0.85; }
+            50% { transform: translateX(-50%) scale(1.06); opacity: 1; }
+        }
+
+        /* Tia nắng chiếu xiên trong chánh điện */
+        .sun-ray {
+            position: absolute;
+            top: -80px;
+            right: -60px;
+            width: 420px;
+            height: 550px;
+            background: linear-gradient(215deg, rgba(254, 240, 138, 0.22) 0%, rgba(251, 191, 36, 0.06) 45%, transparent 75%);
+            transform: rotate(-18deg);
+            pointer-events: none;
+            z-index: 3;
+        }
+
+        /* Sàn gỗ chánh điện có chiều sâu phối cảnh */
+        .temple-floor {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 560px;
+            background: 
+                linear-gradient(180deg, rgba(28, 13, 6, 0.95) 0%, rgba(69, 26, 3, 0.92) 30%, rgba(41, 16, 4, 0.98) 100%),
+                repeating-linear-gradient(90deg, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 2px, transparent 2px, transparent 45px);
+            border-top: 3px solid #b45309;
+            box-shadow: inset 0 25px 45px rgba(0,0,0,0.75);
+        }
+
+        /* Bậc thềm Thượng Điện (VIP) */
+        .vip-platform {
+            position: absolute;
+            top: 375px;
+            left: 30px;
+            right: 30px;
+            height: 70px;
+            background: linear-gradient(180deg, #7f1d1d 0%, #450a0a 100%);
+            border: 2px solid #f59e0b;
+            border-radius: 8px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+        }
+
+        /* Nhân vật Phật tử 2.5D */
+        .pilgrim-entity {
+            position: absolute;
+            width: 64px;
+            height: 96px;
+            transform-origin: bottom center;
+            pointer-events: none;
+            will-change: transform, left, top;
+        }
+
+        /* Chuyển động đi bộ nhấp nhô */
+        .pilgrim-entity.state-walk .pilgrim-sprite {
+            animation: walkBob 0.42s ease-in-out infinite alternate;
+        }
+        @keyframes walkBob {
+            0% { transform: translateY(0px) rotate(-2deg); }
+            100% { transform: translateY(-5px) rotate(2deg); }
+        }
+
+        /* Chuyển động quỳ lạy nhịp nhàng */
+        .pilgrim-entity.state-pray .pilgrim-head-torso {
+            transform-origin: 32px 58px;
+            animation: bowPray 2.6s ease-in-out infinite;
+        }
+        @keyframes bowPray {
+            0%, 100% { transform: translateY(0px) scaleY(1); }
+            40%, 60% { transform: translateY(9px) scaleY(0.84); }
+        }
+
+        /* Bong bóng lời cầu nguyện trên đầu */
+        .prayer-bubble {
+            position: absolute;
+            bottom: 92px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: 175px;
+            padding: 5px 9px;
+            border-radius: 8px;
+            background: rgba(15, 12, 10, 0.84);
+            border: 1px solid rgba(251, 191, 36, 0.55);
+            color: #fef3c7;
+            font-size: 11px;
+            font-weight: 600;
+            line-height: 1.25;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.65);
+            backdrop-filter: blur(2px);
+            word-wrap: break-word;
+            white-space: normal;
+        }
+        .prayer-bubble.vip-bubble {
+            background: linear-gradient(135deg, rgba(120, 53, 15, 0.94) 0%, rgba(69, 26, 3, 0.96) 100%);
+            border: 1.5px solid #fde047;
+            color: #fef08a;
+            box-shadow: 0 0 15px rgba(250, 204, 21, 0.45);
+        }
+
+        /* Thẻ tên dưới chân nhân vật */
+        .nameplate-tag {
+            position: absolute;
+            bottom: -14px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px 2px 3px;
+            border-radius: 9999px;
+            background: rgba(12, 10, 9, 0.85);
+            border: 1px solid rgba(168, 162, 158, 0.4);
+            white-space: nowrap;
+            font-size: 10px;
+            font-weight: 600;
+            color: #f5f5f4;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.6);
+        }
+        .nameplate-tag.vip-tag {
+            border-color: #facc15;
+            background: rgba(69, 26, 3, 0.92);
+            color: #fde047;
+        }
+
+        /* Điểm kéo thả Waypoint trong chế độ Sửa Map */
+        .waypoint-node {
+            position: absolute;
+            width: 18px;
+            height: 18px;
+            margin-left: -9px;
+            margin-top: -9px;
+            border-radius: 50%;
+            cursor: grab;
+            z-index: 9990;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 9px;
+            font-weight: 800;
+            box-shadow: 0 0 10px rgba(0,0,0,0.9);
+            transition: transform 0.1s;
+        }
+        .waypoint-node:hover {
+            transform: scale(1.3);
+        }
+        .waypoint-node:active {
+            cursor: grabbing;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-row items-stretch justify-between bg-stone-950 overflow-hidden">
+
+    <!-- NÚT NỔI BẬT/TẮT NHANH BẢNG DEV & TẮT TIẾNG TAB NÀY -->
+    <div class="fixed top-2.5 left-2.5 z-50 flex flex-wrap items-center gap-1.5">
+        <button onclick="toggleDevPanel()" class="px-2.5 py-1.5 rounded-lg bg-stone-900/95 hover:bg-amber-600 text-amber-300 hover:text-stone-950 border border-amber-500/40 text-[11px] font-bold shadow-lg flex items-center gap-1 transition">
+            <span>🛠️</span> <span id="btn-toggle-dev-text">Ẩn Bảng Dev (F2)</span>
+        </button>
+        <button onclick="toggleEditWaypoints()" id="btn-quick-waypoint" class="px-2.5 py-1.5 rounded-lg bg-stone-900/95 hover:bg-emerald-600 text-emerald-300 hover:text-stone-950 border border-emerald-500/40 text-[11px] font-bold shadow-lg flex items-center gap-1 transition">
+            <span>🎯</span> <span>Lưới Tọa Độ</span>
+        </button>
+        <button onclick="toggleLocalSilentTab()" id="btn-floating-silent" class="px-2.5 py-1.5 rounded-lg bg-stone-900/95 hover:bg-rose-600 text-stone-300 hover:text-white border border-stone-600/60 text-[11px] font-bold shadow-lg flex items-center gap-1 transition" title="Tắt tiếng riêng trên Tab này để bạn làm việc khác, còn cửa sổ OBS vẫn phát tiếng bình thường">
+            <span id="floating-silent-icon">🔊</span> <span id="floating-silent-text">Tab Này: Có Tiếng</span>
+        </button>
+    </div>
+
+    <!-- KHU VỰC BÊN TRÁI: MÀN HÌNH GAME CHÁNH ĐIỆN 9:16 (DÀNH CHO OBS STREAM) -->
+    <div id="stream-stage-wrapper" class="flex-1 min-w-[260px] h-full flex items-center justify-center p-2 relative overflow-hidden bg-stone-950">
+        <div id="game-viewport" class="shrink-0">
+
+            <!-- LỚP 1: ẢNH NỀN CHÁNH ĐIỆN (Mặc định dùng đồ họa Chánh Điện Vàng Rực Rỡ + Cho phép thay ảnh bất kỳ) -->
+            <img id="custom-bg-img" src="" alt="Custom Temple Background" class="absolute inset-0 w-full h-full object-cover hidden z-0" />
+
+            <div id="default-temple-art" class="absolute inset-0 w-full h-full z-0">
+                <!-- Sàn gỗ -->
+                <div class="temple-floor"></div>
+
+                <!-- Cột Rồng Vàng 2 bên -->
+                <div class="absolute top-0 left-3 w-12 h-[420px] bg-gradient-to-r from-amber-900 via-yellow-600 to-amber-900 border-x-2 border-yellow-400/60 shadow-2xl opacity-90"></div>
+                <div class="absolute top-0 right-3 w-12 h-[420px] bg-gradient-to-r from-amber-900 via-yellow-600 to-amber-900 border-x-2 border-yellow-400/60 shadow-2xl opacity-90"></div>
+
+                <!-- Hào quang & Tượng Phật Tổ Vàng -->
+                <div class="buddha-aura"></div>
+                <svg class="absolute top-[38px] left-1/2 -translate-x-1/2 w-[310px] h-[310px] drop-shadow-[0_12px_25px_rgba(0,0,0,0.85)]" viewBox="0 0 300 300">
+                    <defs>
+                        <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#fef08a"/>
+                            <stop offset="35%" stop-color="#facc15"/>
+                            <stop offset="75%" stop-color="#ca8a04"/>
+                            <stop offset="100%" stop-color="#854d0e"/>
+                        </linearGradient>
+                        <linearGradient id="lotusGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" stop-color="#fda4af"/>
+                            <stop offset="50%" stop-color="#e11d48"/>
+                            <stop offset="100%" stop-color="#881337"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Lá đề hào quang phía sau -->
+                    <path d="M150 12 C230 60 255 150 230 235 L70 235 C45 150 70 60 150 12 Z" fill="none" stroke="url(#goldGrad)" stroke-width="5" opacity="0.75"/>
+                    <circle cx="150" cy="115" r="76" fill="none" stroke="#fde047" stroke-width="2" stroke-dasharray="5 5" opacity="0.65"/>
+                    <!-- Đài Sen -->
+                    <ellipse cx="150" cy="248" rx="95" ry="22" fill="#78350f" stroke="#f59e0b" stroke-width="3"/>
+                    <path d="M68 242 Q90 205 115 242 Q150 200 185 242 Q210 205 232 242 Z" fill="url(#lotusGrad)" stroke="#fde047" stroke-width="2"/>
+                    <path d="M85 248 Q115 215 150 248 Q185 215 215 248 Z" fill="url(#goldGrad)" opacity="0.9"/>
+                    <!-- Thân Phật ngồi thiền -->
+                    <path d="M90 230 C82 185 102 140 150 140 C198 140 218 185 210 230 Z" fill="url(#goldGrad)" stroke="#713f12" stroke-width="2"/>
+                    <!-- Chân xếp bằng -->
+                    <ellipse cx="150" cy="226" rx="68" ry="18" fill="url(#goldGrad)" stroke="#854d0e" stroke-width="2"/>
+                    <!-- Chữ Vạn trước ngực -->
+                    <text x="150" y="182" text-anchor="middle" fill="#78350f" font-size="16" font-weight="900">卍</text>
+                    <!-- Đầu Phật -->
+                    <circle cx="150" cy="92" r="22" fill="#ca8a04"/>
+                    <circle cx="150" cy="108" r="30" fill="url(#goldGrad)" stroke="#854d0e" stroke-width="2"/>
+                    <!-- Đôi mắt từ bi & chấm bạch hào -->
+                    <circle cx="150" cy="98" r="2.5" fill="#dc2626"/>
+                    <path d="M136 106 Q142 109 147 106" stroke="#451a03" stroke-width="2" fill="none"/>
+                    <path d="M153 106 Q158 109 164 106" stroke="#451a03" stroke-width="2" fill="none"/>
+                    <path d="M144 120 Q150 124 156 120" stroke="#991b1b" stroke-width="2" fill="none"/>
+                </svg>
+
+                <!-- Bậc thềm Thượng Điện & Đệm Quỳ Đỏ -->
+                <div class="vip-platform"></div>
+
+                <!-- Lư Hương Đồng ở trung tâm -->
+                <div id="incense-burner-art" class="absolute left-1/2 -translate-x-1/2 top-[332px] w-28 h-24 flex flex-col items-center pointer-events-none z-10">
+                    <!-- Chân nhang đang cháy -->
+                    <div class="flex gap-1.5 -mb-1">
+                        <div class="w-0.5 h-5 bg-amber-300 relative"><span class="absolute -top-1 -left-0.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span></div>
+                        <div class="w-0.5 h-6 bg-amber-200 relative"><span class="absolute -top-1 -left-0.5 w-1.5 h-1.5 rounded-full bg-orange-400 animate-pulse"></span></div>
+                        <div class="w-0.5 h-5 bg-amber-300 relative"><span class="absolute -top-1 -left-0.5 w-1.5 h-1.5 rounded-full bg-red-500 animate-ping"></span></div>
+                    </div>
+                    <!-- Bầu lư đồng -->
+                    <div class="w-24 h-14 rounded-b-3xl rounded-t-lg bg-gradient-to-b from-yellow-500 via-amber-600 to-yellow-900 border-2 border-yellow-300 shadow-[0_8px_20px_rgba(0,0,0,0.85)] flex items-center justify-center">
+                        <span class="text-xs font-extrabold text-amber-950 tracking-widest">PHẬT ĐỘ</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tia nắng -->
+            <div class="sun-ray"></div>
+
+            <!-- LỚP 2: CANVAS HIỆU ỨNG KHÓI HƯƠNG, ĐỆM QUỲ & HOA SEN RƠI -->
+            <canvas id="fx-canvas" width="540" height="960" class="absolute inset-0 pointer-events-none z-10"></canvas>
+
+            <!-- LỚP 3: SÂN CHÙA CHỨA CÁC PHẬT TỬ 2.5D (Xếp lớp z-index tự động theo tọa độ Y) -->
+            <div id="pilgrims-layer" class="absolute inset-0 pointer-events-none z-20"></div>
+
+            <!-- LỚP 4: LƯỚI WAYPOINTS KÉO THẢ TRỰC TIẾP (Chỉ hiện khi bật Chế độ Sửa Map) -->
+            <div id="waypoints-layer" class="absolute inset-0 hidden z-40"></div>
+
+            <!-- LỚP 5: GIAO DIỆN HUD OVERLAY TRÊN SÓNG LIVE (Giống mẫu ảnh TikTok Live) -->
+            <div class="absolute inset-0 pointer-events-none z-30 flex flex-col justify-between p-3">
+                <!-- Thanh trạng thái trên cùng -->
+                <div class="flex items-center justify-between mt-8">
+                    <div class="px-3 py-1 rounded-full bg-stone-950/75 border border-amber-500/40 backdrop-blur-md flex items-center gap-2 shadow-lg">
+                        <span class="text-amber-400 text-sm">🪷</span>
+                        <span class="text-xs font-bold text-amber-100">Chánh Điện Cầu An</span>
+                        <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-bold" id="hud-active-pilgrims">0</span>
+                    </div>
+                    <div class="px-3 py-1 rounded-full bg-stone-950/75 border border-amber-500/40 backdrop-blur-md text-[11px] font-semibold text-amber-200 shadow-lg">
+                        🙏 Bình luận lời ước nguyện để vào chùa
+                    </div>
+                </div>
+
+                <!-- Khu vực HUD dưới đáy (Thông báo người vào + Mốc Quà + Bảng Tấm Lòng Thành) -->
+                <div class="w-full flex items-end justify-between gap-2 pb-2">
+                    <!-- Cột trái: Thông báo tham gia & Mốc Coin -->
+                    <div class="flex-1 flex flex-col gap-1.5 max-w-[335px]">
+                        <!-- Dòng thông báo người mới tham gia -->
+                        <div id="hud-join-toast" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-stone-950/90 via-stone-900/85 to-transparent border-l-4 border-amber-400 flex items-center gap-2 shadow-md">
+                            <span class="text-base">👋</span>
+                            <span id="join-toast-text" class="text-xs font-semibold text-amber-100 truncate">Phật tử thiện lành đã tham gia</span>
+                            <span class="text-xs ml-auto">🪷</span>
+                        </div>
+
+                        <!-- 3 Ô hướng dẫn vật phẩm cúng dường -->
+                        <div class="grid grid-cols-3 gap-1.5">
+                            <div class="p-1.5 rounded-lg bg-stone-950/85 border border-amber-500/40 text-center shadow">
+                                <div class="text-[10px] font-extrabold text-amber-300">1 COIN</div>
+                                <div class="text-[10px] text-stone-300">Hoa Hồng 🌹</div>
+                                <div class="text-[9px] text-amber-400/90">Lên Thượng Điện</div>
+                            </div>
+                            <div class="p-1.5 rounded-lg bg-stone-950/85 border border-amber-500/40 text-center shadow">
+                                <div class="text-[10px] font-extrabold text-amber-300">5 COINS</div>
+                                <div class="text-[10px] text-stone-300">Dâng Sen 🪷</div>
+                                <div class="text-[9px] text-amber-400/90">Chuông + Đọc Tên</div>
+                            </div>
+                            <div class="p-1.5 rounded-lg bg-stone-950/85 border border-yellow-400/70 text-center shadow">
+                                <div class="text-[10px] font-extrabold text-yellow-300">10+ COINS</div>
+                                <div class="text-[10px] text-stone-200">Lư Hương Vàng</div>
+                                <div class="text-[9px] text-yellow-300">Hào Quang Đại Cát</div>
+                            </div>
+                        </div>
+
+                        <!-- Dòng thông báo tặng quà -->
+                        <div id="hud-gift-toast" class="px-3 py-1.5 rounded-lg bg-gradient-to-r from-amber-950/90 via-stone-900/85 to-transparent border border-amber-400/50 flex items-center gap-2 shadow-md">
+                            <span class="text-sm">🎁</span>
+                            <span id="gift-toast-text" class="text-xs font-bold text-yellow-200 truncate">Thành tâm công đức - Phước báu vô lượng</span>
+                        </div>
+                    </div>
+
+                    <!-- Cột phải: Bảng xếp hạng TẤM LÒNG THÀNH -->
+                    <div class="w-[180px] rounded-xl bg-stone-950/90 border border-amber-500/50 p-2.5 shadow-xl backdrop-blur-md">
+                        <div class="text-center border-b border-amber-500/30 pb-1 mb-1.5">
+                            <div class="text-[11px] font-extrabold tracking-wider text-amber-300">TẤM LÒNG THÀNH</div>
+                        </div>
+                        <div id="leaderboard-list" class="space-y-1 text-[11px]">
+                            <!-- Render bằng JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- KHU VỰC BÊN PHẢI: BẢNG ĐIỀU KHIỂN TRỰC TIẾP & DEV STUDIO (LIVE CONTROL PANEL) -->
+    <aside id="dev-panel" class="w-[46%] min-w-[340px] max-w-[480px] shrink-0 h-full bg-stone-900 border-l border-stone-800 flex flex-col z-40 shadow-2xl">
+        
+        <!-- Header Bảng Dev -->
+        <div class="p-3.5 bg-stone-950 border-b border-stone-800 flex items-center justify-between">
+            <div>
+                <h1 class="text-sm font-extrabold text-amber-400 flex items-center gap-2">
+                    <span>🏯</span> <span>STUDIO ĐIỀU KHIỂN CHÁNH ĐIỆN (LIVE & DEV)</span>
+                </h1>
+                <p class="text-[11px] text-stone-400 mt-0.5">Chỉnh vị trí, test tương tác & điều khiển âm thanh trực tiếp khi đang Live</p>
+            </div>
+            <div class="flex items-center gap-1.5">
+                <span id="ws-status-badge" class="px-2 py-1 rounded text-[10px] font-bold bg-stone-800 text-stone-400 border border-stone-700">
+                    ⚪ Chế độ Giả Lập
+                </span>
+            </div>
+        </div>
+
+        <!-- THANH CÔNG TẮC "CHẾ ĐỘ TAB ADMIN IM LẶNG" (TẮT TIẾNG RIÊNG TAB NÀY ĐỂ LÀM VIỆC KHÁC) -->
+        <div class="px-3.5 py-2 bg-gradient-to-r from-stone-900 via-stone-900 to-amber-950/30 border-b border-stone-800 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2">
+                <span id="panel-silent-icon" class="text-base">🔊</span>
+                <div>
+                    <div class="text-[11px] font-bold text-stone-200 flex items-center gap-1.5">
+                        <span>Tắt Tiếng Riêng Tab Này (OBS Vẫn Kêu)</span>
+                        <span id="sync-peers-badge" class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/50 text-[9px] font-bold">⚡ Đồng bộ Đa Tab</span>
+                    </div>
+                    <div class="text-[10px] text-stone-400">Bật nút này trên Chrome để làm việc riêng, âm thanh bên OBS Live không bị ảnh hưởng</div>
+                </div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer shrink-0">
+                <input type="checkbox" id="chk-local-silent-tab" class="sr-only peer" onchange="toggleLocalSilentTab(this.checked)">
+                <div class="w-10 h-5 bg-stone-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-rose-600"></div>
+            </label>
+        </div>
+
+        <!-- Thanh Chuyển Tab -->
+        <div class="grid grid-cols-4 bg-stone-950/60 border-b border-stone-800 text-[11px] font-bold">
+            <button onclick="switchDevTab('sim')" id="tab-btn-sim" class="py-2.5 border-b-2 border-amber-500 text-amber-400 bg-stone-900/80">
+                🎮 Điều Khiển
+            </button>
+            <button onclick="switchDevTab('filter')" id="tab-btn-filter" class="py-2.5 border-b-2 border-transparent text-stone-400 hover:text-stone-200 flex items-center justify-center gap-1">
+                <span>🛡️ Lọc Từ Cấm</span>
+                <span id="badge-blocked-count" class="px-1.5 py-0.2 rounded-full bg-red-600 text-white text-[9px]">0</span>
+            </button>
+            <button onclick="switchDevTab('map')" id="tab-btn-map" class="py-2.5 border-b-2 border-transparent text-stone-400 hover:text-stone-200">
+                📐 Sửa Map
+            </button>
+            <button onclick="switchDevTab('tiktok')" id="tab-btn-tiktok" class="py-2.5 border-b-2 border-transparent text-stone-400 hover:text-stone-200">
+                🔌 TikTok Node
+            </button>
+        </div>
+
+        <!-- Nội dung các Tab -->
+        <div class="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
+
+            <!-- TAB 1: GIẢ LẬP TƯƠNG TÁC & ĐIỀU KHIỂN ĐÁM ĐÔNG -->
+            <div id="tab-content-sim" class="space-y-4">
+                
+                <!-- BỘ ĐIỀU KHIỂN PHẬT TỬ ẢO MỒI LÚC MỚI MỞ LIVE (SMART SEEDING BOT) -->
+                <div class="bg-amber-950/35 border border-amber-500/40 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-amber-300 text-xs flex items-center gap-1.5">
+                                <span>🤖 Phật Tử Ảo Giữ Nhiệt Phòng Live (Smart Seeding NPC)</span>
+                            </div>
+                            <div class="text-[10px] text-stone-400 mt-0.5">Tự động đi vào cầu nguyện khi vắng khách & tự nhường chỗ khi có người thật</div>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="toggle-auto-crowd" class="sr-only peer" checked onchange="toggleAutoCrowd(this.checked)">
+                            <div class="w-11 h-6 bg-stone-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-stone-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+                        </label>
+                    </div>
+
+                    <!-- Thanh chỉnh Số lượng người duy trì & Tỷ lệ VIP mẫu -->
+                    <div class="grid grid-cols-2 gap-2.5 pt-1.5 border-t border-amber-500/20">
+                        <div>
+                            <div class="flex justify-between text-[10px] text-stone-300 mb-0.5">
+                                <span>Số người duy trì trên sân</span>
+                                <span id="lbl-bot-target" class="text-amber-300 font-bold">26 người</span>
+                            </div>
+                            <input type="range" id="rng-bot-target" min="5" max="48" value="26" oninput="updateBotSetting('botTargetCrowd', this.value)" class="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg">
+                        </div>
+                        <div>
+                            <div class="flex justify-between text-[10px] text-stone-300 mb-0.5">
+                                <span>Tỷ lệ Bot lên Thượng Điện</span>
+                                <span id="lbl-bot-vip-rate" class="text-amber-300 font-bold">18%</span>
+                            </div>
+                            <input type="range" id="rng-bot-vip" min="0" max="50" step="2" value="18" oninput="updateBotSetting('botVipPercent', this.value)" class="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg">
+                        </div>
+                    </div>
+
+                    <!-- Công tắc Cho phép Bot đọc mẫu TTS & Gõ mõ tự nhiên khi phòng vắng -->
+                    <div class="flex items-center justify-between pt-1 text-[11px]">
+                        <span class="text-stone-300">🎙️ Cho Bot đọc lời nguyện mẫu & gõ mõ khi vắng người chat</span>
+                        <input type="checkbox" id="chk-bot-tts" checked onchange="updateBotSetting('botSpeakTTS', this.checked)" class="w-4 h-4 accent-amber-500 rounded cursor-pointer">
+                    </div>
+                    <div class="flex items-center justify-between text-[10px] text-stone-400 bg-stone-950/70 px-2.5 py-1 rounded-lg border border-stone-800">
+                        <span>📊 Đang trong sân: <b id="stat-real-count" class="text-emerald-400">0 Người thật</b> • <b id="stat-bot-count" class="text-amber-300">0 Phật tử ảo</b></span>
+                        <span class="text-emerald-400">✔ Tự nhường chỗ</span>
+                    </div>
+                </div>
+
+                <!-- Cụm nút Thao tác nhanh trên sóng Live -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2.5">
+                    <div class="font-bold text-stone-200 flex items-center justify-between">
+                        <span>⚡ Thả Nhanh Phật Tử Vào Chùa</span>
+                        <span class="text-[11px] text-amber-400">Đang quỳ: <b id="dev-count-pilgrims">0</b> | Hàng đợi: <b id="dev-queue-count">0</b></span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="spawnRandomPilgrim(false, false, true)" class="py-2.5 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-600 font-bold text-stone-100 flex items-center justify-center gap-1.5 active:scale-95 transition">
+                            <span>🙏</span> <span>+1 Phật Tử Bình Luận</span>
+                        </button>
+                        <button onclick="spawnRandomPilgrim(true, false, true)" class="py-2.5 px-3 rounded-lg bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 font-bold text-stone-950 flex items-center justify-center gap-1.5 shadow-lg active:scale-95 transition">
+                            <span>🪷</span> <span>+1 VIP Dâng Hương</span>
+                        </button>
+                        <button onclick="spawnBatchPilgrims(15, true)" class="py-2 px-3 rounded-lg bg-emerald-900/60 hover:bg-emerald-800/80 border border-emerald-500/40 font-semibold text-emerald-200 flex items-center justify-center gap-1.5 active:scale-95 transition">
+                            <span>👥</span> <span>Buff Đám Đông (+15)</span>
+                        </button>
+                        <button onclick="makeAllPilgrimsLeave(true)" class="py-2 px-3 rounded-lg bg-rose-950/60 hover:bg-rose-900/80 border border-rose-500/40 font-semibold text-rose-200 flex items-center justify-center gap-1.5 active:scale-95 transition">
+                            <span>🚶</span> <span>Cho Tất Cả Ra Về</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Form Gửi Lời Cầu Nguyện Tùy Chỉnh (Test trực tiếp Tên + Câu chúc) -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2.5">
+                    <div class="font-bold text-stone-200">✍️ Gửi Lời Cầu Nguyện Cụ Thể (Test Đọc Tên TTS)</div>
+                    <div class="grid grid-cols-3 gap-2">
+                        <input id="sim-username" type="text" value="Nguyễn Thị Yến Nhi" placeholder="Tên người xem..." class="col-span-1 px-2.5 py-2 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 focus:outline-none focus:border-amber-500">
+                        <input id="sim-prayer" type="text" value="Cầu cho năm nay con tìm được ý trung nhân như ý ạ" placeholder="Nội dung bình luận cầu nguyện..." class="col-span-2 px-2.5 py-2 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 focus:outline-none focus:border-amber-500">
+                    </div>
+                    <div class="flex items-center justify-between gap-2 pt-1">
+                        <label class="flex items-center gap-2 text-stone-300 cursor-pointer">
+                            <input id="sim-is-vip" type="checkbox" checked class="accent-amber-500 w-4 h-4">
+                            <span>🎁 Có tặng quà (Lên Thượng Điện + Đọc ưu tiên)</span>
+                        </label>
+                        <button onclick="spawnCustomPilgrim()" class="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-extrabold shadow active:scale-95 transition">
+                            🚀 Gửi Vào Chánh Điện
+                        </button>
+                    </div>
+                </div>
+
+                <!-- BỘ CHỌN NGUỒN GIỌNG ĐỌC ĐẦY ĐỦ (MULTI-ENGINE TTS & SOUND) -->
+                <div class="bg-stone-950/80 border border-amber-500/30 rounded-xl p-3 space-y-3">
+                    <div class="flex items-center justify-between">
+                        <div class="font-bold text-amber-300 flex items-center gap-1.5">
+                            <span>🎙️ Bộ Chọn Nguồn Giọng Đọc (Multi-Engine TTS)</span>
+                        </div>
+                        <span id="tts-active-status" class="px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/50 text-[10px] font-semibold">Sẵn sàng</span>
+                    </div>
+
+                    <!-- Nút Test Âm Thanh Chùa + Ngắt Khẩn Cấp -->
+                    <div class="grid grid-cols-3 gap-2">
+                        <button onclick="soundEngine.playBell(true)" class="py-2 rounded-lg bg-stone-800 hover:bg-stone-700 border border-amber-500/30 text-amber-300 font-semibold flex items-center justify-center gap-1">
+                            🔔 Chuông Chùa
+                        </button>
+                        <button onclick="soundEngine.playWoodenFish(true)" class="py-2 rounded-lg bg-stone-800 hover:bg-stone-700 border border-amber-500/30 text-amber-200 font-semibold flex items-center justify-center gap-1">
+                            🪵 Gõ Mõ
+                        </button>
+                        <button onclick="panicStopTTS(true)" class="py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-extrabold shadow-lg shadow-red-900/40 flex items-center justify-center gap-1 active:scale-95 transition">
+                            🔇 PANIC MUTE
+                        </button>
+                    </div>
+
+                    <!-- Lựa chọn 4 Nguồn Giọng Đọc (Engine Selector) -->
+                    <div class="space-y-1.5 pt-1 border-t border-stone-800">
+                        <label class="text-stone-300 font-semibold block">1. Chọn Nguồn Phát Giọng Đọc:</label>
+                        <select id="tts-engine-select" onchange="onTTSEngineChange(this.value)" class="w-full px-2.5 py-2 rounded-lg bg-stone-900 border border-amber-500/50 text-amber-200 font-semibold focus:outline-none">
+                            <option value="node_edge">🎙️ 1. Node.js Edge-TTS AI (HoaiMy / NamMinh - Miễn phí, OBS chuẩn 100%)</option>
+                            <option value="google_stream">🌐 2. Chị Google Translate Stream (Audio MP3 trực tiếp cho OBS)</option>
+                            <option value="web_speech" selected>⚡ 3. Trình Duyệt Web Speech API (0đ, Siêu nhẹ, Không giới hạn)</option>
+                            <option value="monk_zen">🧘 4. Giọng Thầy Chùa Trầm Ấm (Pitch Trầm + Gõ Mõ Chánh Điện)</option>
+                        </select>
+                        <p id="tts-engine-desc" class="text-[10px] text-stone-400 leading-relaxed">
+                            💡 Đang dùng <b>Web Speech API</b> tích hợp sẵn trong trình duyệt. Nếu chưa bật Node.js, các chế độ 1 & 2 sẽ tự động chuyển tiếp thông minh về giọng trình duyệt để không bao giờ bị mất tiếng.
+                        </p>
+                    </div>
+
+                    <!-- Tùy chọn chi tiết cho Node.js Edge-TTS (Hiện khi chọn Engine 1) -->
+                    <div id="node-tts-options" class="hidden space-y-2 p-2.5 rounded-lg bg-stone-900/90 border border-stone-700">
+                        <div class="flex items-center justify-between">
+                            <span class="text-stone-300 font-semibold">Giọng AI Neural (Miễn phí qua Node.js):</span>
+                            <span class="text-[10px] text-emerald-400 font-bold">OBS Browser Source OK</span>
+                        </div>
+                        <select id="node-voice-select" onchange="config.nodeVoice = this.value" class="w-full px-2 py-1.5 rounded bg-stone-950 border border-stone-700 text-stone-200">
+                            <option value="vi-VN-HoaiMyNeural">👩 vi-VN-HoaiMyNeural (Nữ Miền Bắc - Tự nhiên, truyền cảm nhất)</option>
+                            <option value="vi-VN-NamMinhNeural">👨 vi-VN-NamMinhNeural (Nam Miền Bắc - Trầm ấm, trang nghiêm)</option>
+                            <option value="google-vi">🌐 google-vi (Chị Google chuẩn qua Node.js Proxy)</option>
+                        </select>
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-[10px] text-stone-400 whitespace-nowrap">URL Server TTS:</span>
+                            <input id="node-tts-url" type="text" value="http://localhost:3000/tts" onchange="config.nodeTtsEndpoint = this.value" class="w-full px-2 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-amber-300 font-mono">
+                        </div>
+                    </div>
+
+                    <!-- Tùy chọn danh sách giọng có sẵn trong máy (Hiện khi chọn Engine 3 hoặc 4) -->
+                    <div id="system-voice-options" class="space-y-1.5 p-2.5 rounded-lg bg-stone-900/90 border border-stone-700">
+                        <div class="flex items-center justify-between">
+                            <span class="text-stone-300 font-semibold">Giọng đọc trong máy của bạn:</span>
+                            <button onclick="populateSystemVoices()" class="text-[10px] text-amber-400 hover:underline">🔄 Quét lại giọng</button>
+                        </div>
+                        <select id="system-voice-select" onchange="config.selectedSystemVoiceURI = this.value" class="w-full px-2 py-1.5 rounded bg-stone-950 border border-stone-700 text-stone-200">
+                            <option value="">-- Tự động ưu tiên giọng Tiếng Việt (vi-VN) --</option>
+                        </select>
+                    </div>
+
+                    <!-- Thanh trượt Tốc độ đọc (Rate), Cao độ (Pitch) & Âm lượng -->
+                    <div class="grid grid-cols-3 gap-2 pt-1">
+                        <div class="bg-stone-900 p-2 rounded-lg border border-stone-800">
+                            <div class="flex justify-between text-[10px] text-stone-400 mb-1">
+                                <span>Tốc độ</span>
+                                <span id="lbl-tts-rate" class="text-amber-300 font-bold">1.05x</span>
+                            </div>
+                            <input type="range" min="0.7" max="1.45" step="0.05" value="1.05" oninput="updateTTSParam('rate', this.value)" class="w-full accent-amber-500">
+                        </div>
+                        <div class="bg-stone-900 p-2 rounded-lg border border-stone-800">
+                            <div class="flex justify-between text-[10px] text-stone-400 mb-1">
+                                <span>Cao độ</span>
+                                <span id="lbl-tts-pitch" class="text-amber-300 font-bold">1.0</span>
+                            </div>
+                            <input type="range" min="0.6" max="1.4" step="0.05" value="1.0" oninput="updateTTSParam('pitch', this.value)" class="w-full accent-amber-500">
+                        </div>
+                        <div class="bg-stone-900 p-2 rounded-lg border border-stone-800">
+                            <div class="flex justify-between text-[10px] text-stone-400 mb-1">
+                                <span>Âm lượng</span>
+                                <span id="lbl-tts-vol" class="text-amber-300 font-bold">100%</span>
+                            </div>
+                            <input type="range" min="0.1" max="1.0" step="0.05" value="1.0" oninput="updateTTSParam('volume', this.value)" class="w-full accent-amber-500">
+                        </div>
+                    </div>
+
+                    <!-- Mẫu câu đọc tùy biến -->
+                    <div class="space-y-1">
+                        <div class="flex justify-between text-[11px]">
+                            <span class="text-stone-400">Mẫu câu đọc (<code class="text-amber-300">{name}</code>, <code class="text-amber-300">{prayer}</code>):</span>
+                            <button onclick="testSelectedTTSVoice()" class="text-amber-400 hover:text-amber-300 font-bold">▶️ Đọc Thử Ngay</button>
+                        </div>
+                        <input id="tts-template-input" type="text" value="Phật tử {name} thành tâm cầu nguyện: {prayer}" onchange="config.ttsTemplate = this.value; sendSyncCommand('UPDATE_CONFIG', { ttsTemplate: this.value })" class="w-full px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-200 text-[11px]">
+                    </div>
+
+                    <!-- Công tắc Bật/Tắt & Chế độ chỉ đọc VIP -->
+                    <div class="space-y-1.5 pt-1 border-t border-stone-800">
+                        <label class="flex items-center justify-between text-stone-300 cursor-pointer">
+                            <span>🔊 Bật đọc tên & lời nguyện tự động</span>
+                            <input type="checkbox" id="toggle-tts" checked onchange="config.ttsEnabled = this.checked; sendSyncCommand('UPDATE_CONFIG', { ttsEnabled: this.checked })" class="accent-amber-500 w-4 h-4">
+                        </label>
+                        <label class="flex items-center justify-between text-stone-300 cursor-pointer">
+                            <span>👑 Chỉ đọc giọng nói khi người xem Tặng Quà (VIP)</span>
+                            <input type="checkbox" id="toggle-tts-vip-only" onchange="config.ttsVipOnly = this.checked; sendSyncCommand('UPDATE_CONFIG', { ttsVipOnly: this.checked })" class="accent-amber-500 w-4 h-4">
+                        </label>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 2: BỘ LỌC TỪ CẤM TIKTOK LIVE & BẢO VỆ PHÒNG LIVE (SAFETY SHIELD) -->
+            <div id="tab-content-filter" class="hidden space-y-4">
+                
+                <!-- Trạng thái Khiên Bảo Vệ & Nút Ngắt Khẩn Cấp -->
+                <div class="bg-emerald-950/30 border border-emerald-500/40 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-bold text-emerald-300 text-xs flex items-center gap-1.5">
+                                <span>🛡️ Khiên Bảo Vệ Tiêu Chuẩn Cộng Đồng TikTok LIVE</span>
+                            </div>
+                            <div class="text-[11px] text-stone-400 mt-0.5">Tự động chặn từ tục tĩu, bẫy phát âm TTS, chính trị, cờ bạc, SĐT & điều hướng</div>
+                        </div>
+                        <button onclick="panicStopTTS(true)" class="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white font-extrabold text-[11px] shadow-lg active:scale-95 transition">
+                            🔇 NGẮT ĐỌC KHẨN
+                        </button>
+                    </div>
+
+                    <!-- Chế độ xử lý khi phát hiện vi phạm -->
+                    <div class="pt-2 border-t border-emerald-500/20 space-y-1.5">
+                        <label class="text-stone-300 font-semibold block">Cách xử lý khi phát hiện Bình luận / Tên vi phạm:</label>
+                        <select id="filter-action-mode" onchange="safetyFilter.setActionMode(this.value)" class="w-full px-2.5 py-2 rounded-lg bg-stone-900 border border-emerald-500/40 text-emerald-200 font-semibold focus:outline-none">
+                            <option value="purify" selected>✨ 1. Thanh Hóa Tâm Linh (Đổi thành lời Sám Hối thiện lành - Khuyên dùng)</option>
+                            <option value="block">🚫 2. Chặn Hoàn Toàn (Không cho vào chùa + Không đọc TTS)</option>
+                            <option value="mask">✳️ 3. Che Dấu Sao *** (Cho vào chùa nhưng che *** và Tắt đọc TTS)</option>
+                        </select>
+                        <p class="text-[10px] text-stone-400">
+                            💡 Nếu <b>Tên tài khoản TikTok</b> chứa từ tục/bẫy đọc lái (VD: <i>"Châu Tinh Trùng"</i>), hệ thống sẽ tự động đổi tên thành <b>"Phật Tử Thiện Lành"</b> để kẻ xấu không thể bẫy giọng đọc trên Live.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Khu vực Test Thử Bộ Lọc (Sandbox) -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-amber-300">🧪 Kiểm Tra Thử Bộ Lọc (Test Chống Troll)</span>
+                        <button onclick="spawnTrollTest()" class="text-[11px] px-2.5 py-1 rounded bg-rose-900/70 hover:bg-rose-800 text-rose-200 border border-rose-500/40 font-semibold">
+                            😈 Thử thả 1 Troll vào chùa
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-1.5">
+                        <input id="test-filter-name" type="text" value="Châu Tinh Trùng" placeholder="Tên test..." class="col-span-1 px-2 py-1.5 rounded bg-stone-900 border border-stone-700 text-stone-200 text-[11px]">
+                        <input id="test-filter-text" type="text" value="v.c.l vào kubet đánh tài xỉu zalo 0987654321" placeholder="Câu bình luận test..." class="col-span-2 px-2 py-1.5 rounded bg-stone-900 border border-stone-700 text-stone-200 text-[11px]">
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                        <button onclick="runFilterSandboxTest()" class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-bold text-[11px]">
+                            🔍 Quét Kiểm Tra Ngay
+                        </button>
+                        <div id="sandbox-test-result" class="flex-1 text-[11px] text-stone-400 truncate text-right">
+                            Bấm quét để xem kết quả lọc...
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 6 Nhóm Từ Cấm TikTok Live Mặc Định -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-stone-200">📚 6 Nhóm Từ Điển Cấm TikTok Live</span>
+                        <span class="text-[10px] text-amber-400">Tổng: <b id="total-banned-words-count">0</b> mẫu nhận diện</span>
+                    </div>
+                    <div id="filter-categories-list" class="grid grid-cols-1 gap-1.5">
+                        <!-- Render bằng JS -->
+                    </div>
+                </div>
+
+                <!-- Thêm / Xóa Từ Cấm Tùy Chỉnh Của Riêng Bạn (Lưu vào máy) -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-stone-200">➕ Từ Cấm Bổ Sung Của Riêng Bạn</span>
+                        <button onclick="safetyFilter.resetCustomWords()" class="text-[10px] text-stone-400 hover:text-rose-400">Khôi phục mặc định</button>
+                    </div>
+                    <div class="flex gap-1.5">
+                        <input id="custom-ban-input" type="text" placeholder="Nhập từ cấm hoặc cụm từ nhạy cảm (cách nhau dấu phẩy)..." class="flex-1 px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-100 text-[11px] focus:outline-none focus:border-amber-500" onkeydown="if(event.key==='Enter') addCustomBannedWordUI()">
+                        <button onclick="addCustomBannedWordUI()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-bold text-[11px] whitespace-nowrap">
+                            + Thêm Từ
+                        </button>
+                    </div>
+                    <!-- Danh sách tag từ tùy chỉnh -->
+                    <div id="custom-words-tags" class="flex flex-wrap gap-1.5 max-h-28 overflow-y-auto p-1.5 rounded bg-stone-900/80 border border-stone-800">
+                        <!-- Render bằng JS -->
+                    </div>
+                </div>
+
+                <!-- Nhật ký chặn vi phạm trong phiên Live -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-stone-200">📋 Nhật Ký Đã Chặn / Thanh Hóa Gần Đây</span>
+                        <button onclick="safetyFilter.clearLogs()" class="text-[10px] text-stone-400 hover:text-stone-200">Xóa nhật ký</button>
+                    </div>
+                    <div id="blocked-logs-container" class="space-y-1 max-h-36 overflow-y-auto text-[10px] font-mono bg-stone-900 p-2 rounded-lg border border-stone-800">
+                        <div class="text-stone-500 text-center py-2">Chưa có bình luận vi phạm nào bị chặn.</div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- TAB 3: CHỈNH SỬA MAP, TỌA ĐỘ QUỲ & THAY ẢNH NỀN TRỰC TIẾP -->
+            <div id="tab-content-map" class="hidden space-y-4">
+                
+                <!-- Bật chế độ kéo thả điểm quỳ -->
+                <div class="bg-emerald-950/30 border border-emerald-500/40 rounded-xl p-3 flex items-center justify-between">
+                    <div>
+                        <div class="font-bold text-emerald-300 text-xs">🎯 Chế Độ Kéo Thả Tọa Độ Trực Tiếp (Live Map Editor)</div>
+                        <div class="text-[11px] text-stone-400 mt-0.5">Bật lên để kéo vị trí Lư hương, Thượng điện (VIP) và các hàng chiếu quỳ ngay trên hình</div>
+                    </div>
+                    <button onclick="toggleEditWaypoints()" id="btn-tab-waypoint" class="px-3 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-stone-950 font-extrabold text-xs transition">
+                        Bật Lưới Tọa Độ
+                    </button>
+                </div>
+
+                <!-- Thay ảnh nền chùa của bạn -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2.5">
+                    <div class="font-bold text-stone-200">🖼️ Thay Ảnh Nền Chánh Điện (Tải ảnh từ máy của bạn)</div>
+                    <p class="text-[11px] text-stone-400">Bạn có thể tải bức ảnh chùa 3D dọc (9:16) giống mẫu vào đây. Các nhân vật 2D và khói hương sẽ tự động đi lại đè lên bức ảnh của bạn!</p>
+                    <div class="flex items-center gap-2">
+                        <label class="flex-1 py-2 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-600 text-center font-semibold text-amber-300 cursor-pointer transition">
+                            <span>📂 Chọn Ảnh Nền Từ Máy...</span>
+                            <input type="file" accept="image/*" class="hidden" onchange="handleBackgroundUpload(event)">
+                        </label>
+                        <button onclick="resetDefaultBackground()" class="py-2 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300">
+                            Mặc định
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Chỉnh Ma Trận Hàng Chiếu Quỳ (Perspective Grid) -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-3">
+                    <div class="font-bold text-stone-200 flex items-center justify-between">
+                        <span>📐 Căn Chỉnh Vùng Thảm Quỳ & Phối Cảnh 2.5D</span>
+                        <button onclick="rebuildNormalSlots()" class="text-[11px] text-amber-400 hover:underline">Áp dụng lại</button>
+                    </div>
+
+                    <div class="space-y-2">
+                        <div>
+                            <div class="flex justify-between text-[11px] mb-0.5">
+                                <span class="text-stone-400">Vị trí Hàng Quỳ Đầu Tiên (Tọa độ Y trên)</span>
+                                <span id="lbl-grid-ytop" class="text-amber-300 font-bold">525px</span>
+                            </div>
+                            <input type="range" min="430" max="650" value="525" oninput="updateGridConfig('yTop', this.value)" class="w-full accent-amber-500">
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-[11px] mb-0.5">
+                                <span class="text-stone-400">Vị trí Hàng Quỳ Cuối Cùng (Tọa độ Y dưới)</span>
+                                <span id="lbl-grid-ybottom" class="text-amber-300 font-bold">790px</span>
+                            </div>
+                            <input type="range" min="680" max="880" value="790" oninput="updateGridConfig('yBottom', this.value)" class="w-full accent-amber-500">
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <div class="flex justify-between text-[11px] mb-0.5">
+                                    <span class="text-stone-400">Số Hàng Ngang</span>
+                                    <span id="lbl-grid-rows" class="text-amber-300 font-bold">6 hàng</span>
+                                </div>
+                                <input type="range" min="3" max="9" value="6" oninput="updateGridConfig('rows', this.value)" class="w-full accent-amber-500">
+                            </div>
+                            <div>
+                                <div class="flex justify-between text-[11px] mb-0.5">
+                                    <span class="text-stone-400">Số Người / Hàng</span>
+                                    <span id="lbl-grid-cols" class="text-amber-300 font-bold">8 người</span>
+                                </div>
+                                <input type="range" min="4" max="11" value="8" oninput="updateGridConfig('cols', this.value)" class="w-full accent-amber-500">
+                            </div>
+                        </div>
+
+                        <div>
+                            <div class="flex justify-between text-[11px] mb-0.5">
+                                <span class="text-stone-400">Thời gian mỗi Phật tử quỳ trước khi Ra Về</span>
+                                <span id="lbl-pray-duration" class="text-amber-300 font-bold">22 giây</span>
+                            </div>
+                            <input type="range" min="8" max="60" value="22" oninput="updatePrayDuration(this.value)" class="w-full accent-amber-500">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Xuất / Lưu cấu hình tọa độ -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-stone-200">💾 Xuất JSON Tọa Độ Đã Chỉnh</span>
+                        <button onclick="exportMapConfig()" class="px-2.5 py-1 rounded bg-amber-500/20 text-amber-300 border border-amber-500/40 font-semibold hover:bg-amber-500/30">
+                            Copy JSON
+                        </button>
+                    </div>
+                    <textarea id="map-json-output" rows="3" readonly class="w-full p-2 rounded bg-stone-900 border border-stone-800 text-[10px] font-mono text-stone-400 focus:outline-none" placeholder="Bấm 'Copy JSON' sau khi kéo thả các điểm trên sân chùa..."></textarea>
+                </div>
+
+            </div>
+
+            <!-- TAB 4: KẾT NỐI NODE.JS (TIKTOK-LIVE-CONNECTOR + FREE AI TTS SERVER) -->
+            <div id="tab-content-tiktok" class="hidden space-y-4">
+                
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2.5">
+                    <div class="font-bold text-amber-300">🔌 Kết Nối WebSocket Với Node.js (`tiktok-live-connector`)</div>
+                    <p class="text-[11px] text-stone-400">Khi bạn chạy file <code class="text-amber-300">server.js</code> trên máy tính, trang web này sẽ tự động nhận Comment, Gift và phát giọng đọc AI miễn phí từ phiên Live TikTok của bạn.</p>
+                    <div class="flex gap-2">
+                        <input id="ws-url-input" type="text" value="ws://localhost:8080" class="flex-1 px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-700 text-stone-200 font-mono text-xs">
+                        <button onclick="connectTikTokWebSocket()" class="px-3.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-stone-950 font-extrabold">
+                            Kết Nối
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Code mẫu server.js tích hợp sẵn cả TikTok Live + Edge-TTS AI + Google TTS Proxy -->
+                <div class="bg-stone-950/80 border border-stone-800 rounded-xl p-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="font-bold text-stone-200">📜 Code `server.js` (TikTok Live + Giọng AI Miễn Phí)</span>
+                        <button onclick="copyNodeServerCode()" class="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-500/30 font-semibold">
+                            📋 Copy server.js
+                        </button>
+                    </div>
+                    <p class="text-[10px] text-stone-400">
+                        Chạy lệnh: <code class="text-emerald-400">npm i tiktok-live-connector ws express cors msedge-tts</code> rồi chạy <code class="text-emerald-400">node server.js</code>
+                    </p>
+                    <pre id="node-code-block" class="p-2.5 rounded-lg bg-stone-900 border border-stone-800 text-[10px] font-mono text-amber-200/90 overflow-x-auto leading-relaxed">// File: server.js (Tích hợp TikTok Live + Giọng đọc AI HoaiMy/NamMinh miễn phí)
+const express = require('express');
+const cors = require('cors');
+const { WebcastPushConnection } = require('tiktok-live-connector');
+const { WebSocketServer } = require('ws');
+const { MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts');
+
+// 1. Tạo Server HTTP cấp phát Giọng Đọc AI Miễn Phí cho Web & OBS Browser Source
+const app = express();
+app.use(cors());
+
+app.get('/tts', async (req, res) => {
+    try {
+        const text = (req.query.text || 'Nam mô A Di Đà Phật').slice(0, 220);
+        const voice = req.query.voice || 'vi-VN-HoaiMyNeural';
+
+        // Nếu chọn giọng Chị Google qua Proxy Node.js
+        if (voice === 'google-vi') {
+            const gUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(text)}`;
+            const response = await fetch(gUrl);
+            res.setHeader('Content-Type', 'audio/mpeg');
+            const arrayBuffer = await response.arrayBuffer();
+            return res.send(Buffer.from(arrayBuffer));
+        }
+
+        // Mặc định: Dùng Microsoft Edge Neural TTS (HoaiMyNeural / NamMinhNeural) miễn phí 100%
+        const tts = new MsEdgeTTS();
+        await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_Mono_MP3);
+        res.setHeader('Content-Type', 'audio/mpeg');
+        const readable = tts.toStream(text);
+        readable.pipe(res);
+    } catch (err) {
+        console.error('TTS Error:', err.message);
+        res.status(500).end();
+    }
+});
+
+app.listen(3000, () => console.log('🎙️ Server Giọng Đọc AI đang chạy tại: http://localhost:3000/tts'));
+
+// 2. Tạo WebSocket Server truyền sự kiện TikTok Live + Đồng bộ Tab Admin sang OBS
+const TIKTOK_USERNAME = "ten_id_tiktok_cua_ban"; // Đổi thành ID TikTok đang Live
+const wss = new WebSocketServer({ port: 8080 });
+const tiktok = new WebcastPushConnection(TIKTOK_USERNAME);
+
+function broadcast(data, excludeWs = null) {
+    const json = JSON.stringify(data);
+    wss.clients.forEach(client => {
+        if (client !== excludeWs && client.readyState === 1) client.send(json);
+    });
+}
+
+// Chuyển tiếp lệnh điều khiển từ Tab Admin sang cửa sổ OBS Browser Source
+wss.on('connection', ws => {
+    ws.on('message', raw => {
+        try {
+            const msg = JSON.parse(raw);
+            if (msg.type === 'ADMIN_SYNC') broadcast(msg, ws);
+        } catch (e) {}
+    });
+});
+
+tiktok.connect().then(state => {
+    console.log(`✅ Đã kết nối phòng Live: ${state.roomId}`);
+}).catch(err => console.error('❌ Lỗi kết nối TikTok:', err));
+
+tiktok.on('chat', data => {
+    broadcast({
+        type: 'chat',
+        username: data.nickname || data.uniqueId,
+        comment: data.comment
+    });
+});
+
+tiktok.on('gift', data => {
+    if (data.giftType === 1 && !data.repeatEnd) return;
+    broadcast({
+        type: 'gift',
+        username: data.nickname || data.uniqueId,
+        giftName: data.giftName,
+        coins: (data.diamondCount || 1) * (data.repeatCount || 1)
+    });
+});</pre>
+                </div>
+
+            </div>
+
+        </div>
+
+        <!-- Footer hướng dẫn phím tắt -->
+        <div class="p-2.5 bg-stone-950 border-t border-stone-800 text-[11px] text-stone-400 flex items-center justify-between">
+            <span>💡 Phím tắt: <b class="text-amber-400">F2</b> Ẩn/Hiện Bảng Dev</span>
+            <span id="toast-copy-feedback" class="text-emerald-400 font-semibold"></span>
+        </div>
+    </aside>
+
+    <!-- SCRIPT HỆ THỐNG GAME 2.5D, MULTI-ENGINE TTS, SAFETY FILTER & MULTI-TAB SYNC -->
+    <script>
+        /********************************************************************
+         * 1. CẤU HÌNH TRẠNG THÁI CHÁNH ĐIỆN (STATE & CONFIG)
+         ********************************************************************/
+        const config = {
+            ttsEnabled: true,
+            ttsVipOnly: false,
+            ttsEngine: 'web_speech',
+            nodeVoice: 'vi-VN-HoaiMyNeural',
+            nodeTtsEndpoint: 'http://localhost:3000/tts',
+            selectedSystemVoiceURI: '',
+            ttsRate: 1.05,
+            ttsPitch: 1.0,
+            ttsVolume: 1.0,
+            ttsTemplate: 'Phật tử {name} thành tâm cầu nguyện: {prayer}',
+            showWaypoints: false,
+            autoCrowd: true,
+            botTargetCrowd: 26,
+            botVipPercent: 18,
+            botSpeakTTS: true,
+            prayDurationSec: 22,
+            spawnPoint: { x: 270, y: 950 },
+            exitLeft: { x: -40, y: 840 },
+            exitRight: { x: 580, y: 840 },
+            incenseBurner: { x: 270, y: 365 },
+            grid: {
+                rows: 6,
+                cols: 8,
+                yTop: 525,
+                yBottom: 790,
+                topWidth: 360,
+                bottomWidth: 470
+            }
+        };
+
+        // 6 Vị trí Thượng Điện (VIP Cushions) gần lư hương
+        const vipSlots = [
+            { id: 'vip-0', x: 105, y: 425, isVip: true, occupiedBy: null },
+            { id: 'vip-1', x: 170, y: 418, isVip: true, occupiedBy: null },
+            { id: 'vip-2', x: 230, y: 415, isVip: true, occupiedBy: null },
+            { id: 'vip-3', x: 310, y: 415, isVip: true, occupiedBy: null },
+            { id: 'vip-4', x: 370, y: 418, isVip: true, occupiedBy: null },
+            { id: 'vip-5', x: 435, y: 425, isVip: true, occupiedBy: null }
+        ];
+
+        // Danh sách các vị trí chiếu quỳ phổ thông (Normal Slots)
+        let normalSlots = [];
+
+        // Danh sách Phật tử đang trên màn hình & Hàng đợi
+        const pilgrims = [];
+        const waitingQueue = [];
+        let pilgrimIdCounter = 1;
+
+        // Bảng xếp hạng Tấm Lòng Thành
+        const donorsMap = new Map([
+            ['ng thái available', 227],
+            ['suaxetrungsh', 164],
+            ['helixing', 95],
+            ['Phật tử ẩn danh', 50]
+        ]);
+
+        // Dữ liệu mẫu tiếng Việt chân thực cho Phật Tử Ảo (Smart Seeding NPC)
+        const sampleNames = [
+            'Nguyễn Thị Yến Nhi', 'Trần Minh Khang', 'Lê Hoàng Bảo', 'Phạm Thu Hà',
+            'Vũ Đức Đạt', 'Phương Ngọc Ánh', 'Hoàng Gia Huy', 'Đặng Khánh Linh',
+            'Bùi Thanh Tùng', 'Ngô Mỹ Duyên', 'Anh Bắc ROMEO', 'Tối Bên Chùa',
+            'Đỗ Quang Minh', 'Hồ Thảo Vy', 'Lý Hải Đăng', 'Trương Bảo Ngọc'
+        ];
+        const samplePrayers = [
+            'Cầu cho gia đình con năm nay bình an, mạnh khỏe ạ 🙏',
+            'Mong cho con buôn may bán đắt, khách khứa tấp nập',
+            'Cầu cho con thi giữa kì Toán Lý đạt điểm tốt nhất',
+            'Nam Mô A Di Đà Phật, cầu cho cha mẹ bách niên giai lão',
+            'Cầu cho mai con chốt được nhiều đơn hàng suôn sẻ',
+            'Xin vía năm nay tìm được ý trung nhân chân thành',
+            'Ước mai đề thi dễ, làm bài trúng tủ 100%',
+            'Cầu bình an, tai qua nạn khỏi, tâm thanh tịnh',
+            'Xin bề trên phù hộ tháng mới công việc hanh thông',
+            'Thành tâm lễ Phật, cầu cho mọi người trong phòng live bình an'
+        ];
+
+        /********************************************************************
+         * 1.5. CHẾ ĐỘ TAB ADMIN IM LẶNG & ĐỒNG BỘ ĐA MÀN HÌNH (OBS SYNC)
+         ********************************************************************/
+        let isLocalTabMuted = sessionStorage.getItem('chua_silent_admin_tab') === 'true';
+        const syncChannel = ('BroadcastChannel' in window) ? new BroadcastChannel('chua_online_live_sync_v1') : null;
+        let wsConnection = null;
+
+        function toggleLocalSilentTab(forceState) {
+            if (typeof forceState === 'boolean') {
+                isLocalTabMuted = forceState;
+            } else {
+                isLocalTabMuted = !isLocalTabMuted;
+            }
+            sessionStorage.setItem('chua_silent_admin_tab', isLocalTabMuted ? 'true' : 'false');
+
+            if (isLocalTabMuted) {
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+                if (currentAudioElement) {
+                    try {
+                        currentAudioElement.pause();
+                        currentAudioElement = null;
+                    } catch (e) {}
+                }
+                isSpeaking = false;
+                ttsQueue.length = 0;
+            }
+            updateLocalSilentTabUI();
+        }
+
+        function updateLocalSilentTabUI() {
+            const chk = document.getElementById('chk-local-silent-tab');
+            const floatingBtn = document.getElementById('btn-floating-silent');
+            const floatingIcon = document.getElementById('floating-silent-icon');
+            const floatingText = document.getElementById('floating-silent-text');
+            const panelIcon = document.getElementById('panel-silent-icon');
+
+            if (chk) chk.checked = isLocalTabMuted;
+            if (isLocalTabMuted) {
+                if (floatingBtn) {
+                    floatingBtn.className = 'px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white border border-rose-400 text-xs font-extrabold shadow-lg flex items-center gap-1.5 transition';
+                }
+                if (floatingIcon) floatingIcon.textContent = '🔇';
+                if (floatingText) floatingText.textContent = 'Tab Này Đang Tắt Tiếng (Làm Việc Riêng)';
+                if (panelIcon) panelIcon.textContent = '🔇';
+            } else {
+                if (floatingBtn) {
+                    floatingBtn.className = 'px-3 py-1.5 rounded-lg bg-stone-900/90 hover:bg-rose-600 text-stone-300 hover:text-white border border-stone-600/60 text-xs font-bold shadow-lg flex items-center gap-1.5 transition';
+                }
+                if (floatingIcon) floatingIcon.textContent = '🔊';
+                if (floatingText) floatingText.textContent = 'Tab Này: Có Tiếng';
+                if (panelIcon) panelIcon.textContent = '🔊';
+            }
+        }
+
+        function sendSyncCommand(action, payload = {}) {
+            const packet = { type: 'ADMIN_SYNC', action, payload, ts: Date.now() };
+            if (syncChannel) {
+                try { syncChannel.postMessage(packet); } catch (e) {}
+            }
+            if (wsConnection && wsConnection.readyState === 1) {
+                try { wsConnection.send(JSON.stringify(packet)); } catch (e) {}
+            }
+        }
+
+        function handleIncomingSyncCommand(packet) {
+            if (!packet || packet.type !== 'ADMIN_SYNC') return;
+            const { action, payload } = packet;
+
+            switch (action) {
+                case 'SPAWN_PILGRIM':
+                    requestSpawnPilgrim({ ...payload, fromSync: true });
+                    break;
+                case 'SPAWN_BATCH':
+                    spawnBatchPilgrims(payload.count || 15, false);
+                    break;
+                case 'LEAVE_ALL':
+                    makeAllPilgrimsLeave(false);
+                    break;
+                case 'PLAY_BELL':
+                    soundEngine.playBell(false);
+                    break;
+                case 'PLAY_WOODEN_FISH':
+                    soundEngine.playWoodenFish(false);
+                    break;
+                case 'PANIC_MUTE':
+                    panicStopTTS(false);
+                    break;
+                case 'TEST_TTS':
+                    enqueueTTS(payload.text, true);
+                    break;
+                case 'UPDATE_CONFIG':
+                    Object.assign(config, payload);
+                    syncConfigUIFromState();
+                    break;
+                case 'UPDATE_GRID':
+                    Object.assign(config.grid, payload);
+                    rebuildNormalSlots();
+                    break;
+                case 'UPDATE_WAYPOINT':
+                    applySyncedWaypoint(payload);
+                    break;
+            }
+        }
+
+        if (syncChannel) {
+            syncChannel.onmessage = (ev) => handleIncomingSyncCommand(ev.data);
+        }
+
+        function syncConfigUIFromState() {
+            const engSel = document.getElementById('tts-engine-select');
+            if (engSel && engSel.value !== config.ttsEngine) {
+                engSel.value = config.ttsEngine;
+                onTTSEngineChange(config.ttsEngine, false);
+            }
+            const tplIn = document.getElementById('tts-template-input');
+            if (tplIn) tplIn.value = config.ttsTemplate;
+            const chkTts = document.getElementById('toggle-tts');
+            if (chkTts) chkTts.checked = config.ttsEnabled;
+            const chkVip = document.getElementById('toggle-tts-vip-only');
+            if (chkVip) chkVip.checked = config.ttsVipOnly;
+
+            const chkAuto = document.getElementById('toggle-auto-crowd');
+            if (chkAuto) chkAuto.checked = config.autoCrowd;
+            const rngTarget = document.getElementById('rng-bot-target');
+            if (rngTarget) rngTarget.value = config.botTargetCrowd;
+            const lblTarget = document.getElementById('lbl-bot-target');
+            if (lblTarget) lblTarget.textContent = `${config.botTargetCrowd} người`;
+            const rngVip = document.getElementById('rng-bot-vip');
+            if (rngVip) rngVip.value = config.botVipPercent;
+            const lblVip = document.getElementById('lbl-bot-vip-rate');
+            if (lblVip) lblVip.textContent = `${config.botVipPercent}%`;
+            const chkBotTts = document.getElementById('chk-bot-tts');
+            if (chkBotTts) chkBotTts.checked = config.botSpeakTTS;
+        }
+
+        /********************************************************************
+         * 2. HỆ THỐNG LỌC TỪ CẤM TIKTOK LIVE (COMMUNITY GUIDELINES SHIELD)
+         ********************************************************************/
+        const safetyFilter = {
+            actionMode: 'purify',
+            blockedCount: 0,
+            logs: [],
+            customWords: [],
+            purifiedPrayers: [
+                'Nam Mô A Di Đà Phật, con xin thành tâm sám hối mọi lỗi lầm 🙏',
+                'Nguyện đem công đức này hướng về khắp tất cả chúng sinh đều trọn thành Phật đạo',
+                'Con xin giữ tâm thanh tịnh, khẩu nghiệp thiện lành nơi cửa Phật 🙏',
+                'Nam Mô Quan Thế Âm Bồ Tát, xin độ cho tâm con luôn sáng suốt bình an'
+            ],
+            categories: {
+                profanity: {
+                    name: '🤬 Tục tĩu / Chửi thề / 18+ (Có lách dấu)',
+                    enabled: true,
+                    words: [
+                        'đm', 'địt', 'đụ', 'lồn', 'cặc', 'buồi', 'đéo', 'vcl', 'vl', 'vkl', 'đkm', 'dkm',
+                        'clm', 'cc', 'cmm', 'đĩ', 'phò', 'cave', 'chịch', 'xoạc', 'nứng', 'dâm', 'hiếp dâm',
+                        'bú cu', 'vú', 'mông', 'sục cặc', 'thủ dâm', 'khiêu dâm', 'sex', 'jav', 'xnxx', 'pornhub',
+                        'con mẹ mày', 'mả cha', 'tổ sư', 'chó đẻ', 'súc vật', 'óc chó', 'ngu lồn', 'hãm lồn'
+                    ]
+                },
+                tts_traps: {
+                    name: '🔊 Bẫy Phát Âm TTS (Tên đọc lái bậy)',
+                    enabled: true,
+                    words: [
+                        'châu tinh trùng', 'tinh trùng', 'bành thị lồng', 'lê văn luyện', 'đụ má', 'bà nội cha',
+                        'con cật', 'củ cật', 'cái lồng', 'lồng đèn đứt', 'bú lồn', 'liếm lồn', 'địt cụ', 'cụ tổ'
+                    ]
+                },
+                violence_drugs: {
+                    name: '🔪 Bạo lực / Tự hại / Chất cấm (Gậy nặng)',
+                    enabled: true,
+                    words: [
+                        'giết người', 'chém chết', 'đâm chết', 'tự tử', 'tự sát', 'nhảy cầu', 'rạch tay', 'uống thuốc sâu',
+                        'treo cổ', 'bom', 'súng đạn', 'khủng bố', 'ma túy', 'cần sa', 'đập đá', 'ngáo đá', 'hàng trắng',
+                        'thuốc lắc', 'kẹo ke', 'hút cỏ', 'chích xì ke', 'heroin', 'máu me', 'chặt đầu'
+                    ]
+                },
+                gambling_scam: {
+                    name: '🎲 Cờ bạc / Cá độ / Lừa đảo tài chính',
+                    enabled: true,
+                    words: [
+                        'tài xỉu', 'cá độ', 'cờ bạc', 'lô đề', 'xóc đĩa', 'nhà cái', 'kubet', 'sunwin', 'go88',
+                        'b52', 'rikvip', 'nổ hũ', 'bắn cá đổi thưởng', 'casino', 'vay nóng', 'bốc bát họ',
+                        'kéo tài xỉu', 'nhóm kéo', 'kiếm tiền tại nhà', 'tuyển cộng tác viên', 'lừa đảo'
+                    ]
+                },
+                redirect_pii: {
+                    name: '📱 Điều hướng nền tảng / SĐT / Tiền tệ',
+                    enabled: true,
+                    words: [
+                        'zalo', 'facebook', 'phây búc', 'shopee', 'sóp pi', 'lazada', 'telegram', 'tele', 'youtube',
+                        'chuyển khoản', 'số tài khoản', 'stk', 'momo', 'rửa tiền', 'đô la', 'link bio', 'nhắn tin riêng'
+                    ]
+                },
+                politics_religion: {
+                    name: '⚖️ Chính trị / Xúc phạm tôn giáo & Tâm linh',
+                    enabled: true,
+                    words: [
+                        'phản động', 'ba que', '3 que', 'cali', 'khát nước', 'cộng sản', 'biểu tình', 'lật đổ',
+                        'chùa lừa đảo', 'sư giả', 'phật giả', 'cúng tiền cho sư', 'sư thầy ăn thịt', 'buôn thần bán thánh'
+                    ]
+                }
+            },
+
+            removeVietnameseTones(str) {
+                return str.normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+                    .toLowerCase();
+            },
+
+            normalizeForScan(rawText) {
+                const lower = (rawText || '').toLowerCase().trim();
+                const collapsed = lower.replace(/[\.\,\-\_\*\+\~\|\s]+/g, ' ');
+                const squashed = lower.replace(/[\.\,\-\_\*\+\~\|\s]+/g, '');
+                const noTone = this.removeVietnameseTones(collapsed);
+                return { lower, collapsed, squashed, noTone };
+            },
+
+            getAllActiveBadWords() {
+                let list = [...this.customWords];
+                Object.values(this.categories).forEach(cat => {
+                    if (cat.enabled) list.push(...cat.words);
+                });
+                return list.map(w => w.trim().toLowerCase()).filter(Boolean);
+            },
+
+            scanText(rawText) {
+                if (!rawText) return { violated: false, reason: null, matchedWord: null };
+                const { lower, collapsed, squashed, noTone } = this.normalizeForScan(rawText);
+
+                if (this.categories.redirect_pii.enabled) {
+                    const digitsOnly = rawText.replace(/[\.\-\s\_]/g, '');
+                    if (/(0[3|5|7|8|9][0-9]{8,9}|\+84[0-9]{8,9})/.test(digitsOnly)) {
+                        return { violated: true, reason: 'Số điện thoại (PII)', matchedWord: 'SĐT' };
+                    }
+                    if (/(https?:\/\/|www\.|[a-z0-9\-]+\.(com|vn|net|org|me|vip|win|club|fun)\b)/i.test(lower)) {
+                        return { violated: true, reason: 'Link Web ngoài', matchedWord: 'URL' };
+                    }
+                }
+
+                const badWords = this.getAllActiveBadWords();
+                for (const word of badWords) {
+                    if (!word) continue;
+                    const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+                    if (word.includes(' ')) {
+                        if (collapsed.includes(word)) {
+                            return { violated: true, reason: 'Từ cấm', matchedWord: word };
+                        }
+                        const wordNoSpace = word.replace(/\s+/g, '');
+                        if (wordNoSpace.length >= 5 && squashed.includes(wordNoSpace)) {
+                            return { violated: true, reason: 'Từ cấm (viết liền lách luật)', matchedWord: word };
+                        }
+                    } else {
+                        const boundaryRegex = new RegExp(`(^|[^a-zA-Z0-9À-ỹ])${escaped}([^a-zA-Z0-9À-ỹ]|$)`, 'i');
+                        if (boundaryRegex.test(collapsed) || boundaryRegex.test(lower)) {
+                            return { violated: true, reason: 'Từ cấm', matchedWord: word };
+                        }
+                        const wordNoTone = this.removeVietnameseTones(word);
+                        if (wordNoTone.length >= 3) {
+                            const spacedPattern = wordNoTone.split('').join('[\\s\\.\\-\\_\\*]+');
+                            const bypassRegex = new RegExp(`(^|[^a-z0-9])${spacedPattern}([^a-z0-9]|$)`, 'i');
+                            if (bypassRegex.test(noTone)) {
+                                return { violated: true, reason: 'Cố tình lách ký tự', matchedWord: word };
+                            }
+                        }
+                    }
+                }
+                return { violated: false, reason: null, matchedWord: null };
+            },
+
+            maskBadWords(rawText) {
+                let result = rawText;
+                const badWords = this.getAllActiveBadWords();
+                badWords.forEach(w => {
+                    if (!w) return;
+                    const escaped = w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    const reg = new RegExp(escaped, 'gi');
+                    result = result.replace(reg, '***');
+                });
+                result = result.replace(/(0[3|5|7|8|9][0-9\.\-\s]{7,12})/g, '***');
+                return result;
+            },
+
+            inspectInteraction(username, prayer, recordLog = true) {
+                const nameScan = this.scanText(username);
+                const prayerScan = this.scanText(prayer);
+
+                let safeUsername = username;
+                let safePrayer = prayer;
+                let allowTTS = true;
+                let allowed = true;
+
+                if (nameScan.violated) {
+                    safeUsername = 'Phật Tử Thiện Lành';
+                    if (recordLog) this.addLog(username, `Tên vi phạm (${nameScan.matchedWord}) -> Đổi tên ẩn danh`);
+                }
+
+                if (prayerScan.violated) {
+                    if (this.actionMode === 'block') {
+                        allowed = false;
+                        allowTTS = false;
+                        if (recordLog) this.addLog(username, `Chặn hoàn toàn: "${prayer}" (${prayerScan.matchedWord})`);
+                    } else if (this.actionMode === 'purify') {
+                        safePrayer = this.purifiedPrayers[Math.floor(Math.random() * this.purifiedPrayers.length)];
+                        if (recordLog) this.addLog(username, `Thanh hóa câu: "${prayer}" (${prayerScan.matchedWord})`);
+                    } else if (this.actionMode === 'mask') {
+                        safePrayer = this.maskBadWords(prayer);
+                        allowTTS = false;
+                        if (recordLog) this.addLog(username, `Che *** & Tắt TTS: "${prayer}" (${prayerScan.matchedWord})`);
+                    }
+                }
+
+                return {
+                    allowed,
+                    allowTTS,
+                    safeUsername,
+                    safePrayer,
+                    nameViolated: nameScan.violated,
+                    prayerViolated: prayerScan.violated,
+                    matchedWord: prayerScan.matchedWord || nameScan.matchedWord
+                };
+            },
+
+            addLog(username, detail) {
+                this.blockedCount++;
+                const timeStr = new Date().toLocaleTimeString('vi-VN', { hour12: false });
+                this.logs.unshift({ time: timeStr, user: username, detail });
+                if (this.logs.length > 30) this.logs.pop();
+                this.renderLogsUI();
+            },
+
+            clearLogs() {
+                this.logs = [];
+                this.blockedCount = 0;
+                this.renderLogsUI();
+            },
+
+            setActionMode(mode) {
+                this.actionMode = mode;
+            },
+
+            saveCustomWords() {
+                try {
+                    localStorage.setItem('chua_custom_banned_words', JSON.stringify(this.customWords));
+                } catch (e) {}
+                this.renderCustomWordsUI();
+            },
+
+            loadCustomWords() {
+                try {
+                    const saved = localStorage.getItem('chua_custom_banned_words');
+                    if (saved) this.customWords = JSON.parse(saved);
+                    else this.customWords = ['kênh rác', 'live giả', 'cúng tiền'];
+                } catch (e) {
+                    this.customWords = ['kênh rác', 'live giả'];
+                }
+            },
+
+            resetCustomWords() {
+                this.customWords = ['kênh rác', 'live giả', 'cúng tiền'];
+                this.saveCustomWords();
+            },
+
+            renderCategoriesUI() {
+                const container = document.getElementById('filter-categories-list');
+                if (!container) return;
+                container.innerHTML = '';
+                let totalCount = this.customWords.length;
+
+                Object.entries(this.categories).forEach(([key, cat]) => {
+                    if (cat.enabled) totalCount += cat.words.length;
+                    const div = document.createElement('div');
+                    div.className = 'flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-stone-900 border border-stone-800';
+                    div.innerHTML = `
+                        <div class="flex items-center gap-2">
+                            <input type="checkbox" ${cat.enabled ? 'checked' : ''} onchange="safetyFilter.toggleCategory('${key}', this.checked)" class="accent-emerald-500 w-3.5 h-3.5 cursor-pointer">
+                            <span class="text-[11px] font-semibold text-stone-200">${cat.name}</span>
+                        </div>
+                        <span class="text-[10px] px-1.5 py-0.5 rounded bg-stone-800 text-stone-400 font-mono">${cat.words.length} từ</span>
+                    `;
+                    container.appendChild(div);
+                });
+
+                const countEl = document.getElementById('total-banned-words-count');
+                if (countEl) countEl.textContent = totalCount;
+            },
+
+            toggleCategory(key, state) {
+                if (this.categories[key]) {
+                    this.categories[key].enabled = state;
+                    this.renderCategoriesUI();
+                }
+            },
+
+            renderCustomWordsUI() {
+                const container = document.getElementById('custom-words-tags');
+                if (!container) return;
+                container.innerHTML = '';
+                if (this.customWords.length === 0) {
+                    container.innerHTML = '<span class="text-[10px] text-stone-500">Chưa có từ tùy chỉnh nào.</span>';
+                } else {
+                    this.customWords.forEach((word, idx) => {
+                        const tag = document.createElement('span');
+                        tag.className = 'inline-flex items-center gap-1 px-2 py-0.5 rounded bg-stone-800 border border-stone-700 text-amber-200 text-[10px]';
+                        tag.innerHTML = `<span>${word}</span><button onclick="safetyFilter.removeCustomWord(${idx})" class="text-stone-400 hover:text-rose-400 font-bold">×</button>`;
+                        container.appendChild(tag);
+                    });
+                }
+                this.renderCategoriesUI();
+            },
+
+            removeCustomWord(idx) {
+                this.customWords.splice(idx, 1);
+                this.saveCustomWords();
+            },
+
+            renderLogsUI() {
+                const badge = document.getElementById('badge-blocked-count');
+                if (badge) badge.textContent = this.blockedCount;
+
+                const box = document.getElementById('blocked-logs-container');
+                if (!box) return;
+                if (this.logs.length === 0) {
+                    box.innerHTML = '<div class="text-stone-500 text-center py-2">Chưa có bình luận vi phạm nào bị chặn.</div>';
+                    return;
+                }
+                box.innerHTML = this.logs.map(item => `
+                    <div class="p-1.5 rounded bg-stone-950 border-l-2 border-red-500 flex items-start justify-between gap-2">
+                        <span class="text-stone-300"><b class="text-amber-300">[${item.user}]</b> ${item.detail}</span>
+                        <span class="text-stone-500 shrink-0">${item.time}</span>
+                    </div>
+                `).join('');
+            }
+        };
+
+        function initSafetyFilterUI() {
+            safetyFilter.loadCustomWords();
+            safetyFilter.renderCategoriesUI();
+            safetyFilter.renderCustomWordsUI();
+            safetyFilter.renderLogsUI();
+        }
+
+        function addCustomBannedWordUI() {
+            const input = document.getElementById('custom-ban-input');
+            if (!input || !input.value.trim()) return;
+            const parts = input.value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+            parts.forEach(w => {
+                if (!safetyFilter.customWords.includes(w)) {
+                    safetyFilter.customWords.push(w);
+                }
+            });
+            input.value = '';
+            safetyFilter.saveCustomWords();
+        }
+
+        function runFilterSandboxTest() {
+            const name = document.getElementById('test-filter-name').value;
+            const text = document.getElementById('test-filter-text').value;
+            const res = safetyFilter.inspectInteraction(name, text, false);
+            const out = document.getElementById('sandbox-test-result');
+            if (res.nameViolated || res.prayerViolated) {
+                out.innerHTML = `<span class="text-rose-400 font-bold">⚠️ Phát hiện: "${res.matchedWord}"</span> → Đổi thành: <b class="text-emerald-300">[${res.safeUsername}] ${res.allowed ? res.safePrayer : '(Đã chặn)'}</b>`;
+            } else {
+                out.innerHTML = `<span class="text-emerald-400 font-bold">✅ Hợp lệ an toàn 100%</span>`;
+            }
+        }
+
+        function spawnTrollTest() {
+            const trollSamples = [
+                { u: 'Châu Tinh Trùng', p: 'v.c.l vào kubet đánh tài xỉu ăn tiền' },
+                { u: 'Anh Hùng Bàn Phím', p: 'kết bạn zalo 0987654321 kéo tài xỉu' },
+                { u: 'Bành Thị Lồng', p: 'chùa lừa đảo cúng tiền cho sư' }
+            ];
+            const pick = trollSamples[Math.floor(Math.random() * trollSamples.length)];
+            requestSpawnPilgrim({ username: pick.u, prayer: pick.p, isVip: true, coins: 5, playSound: true, broadcastSync: true });
+        }
+
+        function panicStopTTS(broadcastSync = false) {
+            if (broadcastSync) {
+                sendSyncCommand('PANIC_MUTE', {});
+            }
+            ttsQueue.length = 0;
+            isSpeaking = false;
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+            }
+            if (currentAudioElement) {
+                try {
+                    currentAudioElement.pause();
+                    currentAudioElement.currentTime = 0;
+                    currentAudioElement = null;
+                } catch (e) {}
+            }
+            setTTSStatusBadge('🔇 Đã ngắt khẩn cấp!', false);
+        }
+
+        /********************************************************************
+         * 3. BỘ TỔNG HỢP ÂM THANH CHÙA (WEB AUDIO API) & ĐA NGUỒN TTS
+         ********************************************************************/
+        class TempleSoundEngine {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+            playBell(broadcastSync = false) {
+                if (broadcastSync) {
+                    sendSyncCommand('PLAY_BELL', {});
+                }
+                if (isLocalTabMuted) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    const freqs = [261.6, 523.2, 784.0, 1046.5];
+                    freqs.forEach((f, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = idx === 0 ? 'sine' : 'triangle';
+                        osc.frequency.setValueAtTime(f, now);
+
+                        const startGain = (0.28 / (idx + 1)) * config.ttsVolume;
+                        gain.gain.setValueAtTime(0.001, now);
+                        gain.gain.linearRampToValueAtTime(startGain, now + 0.02);
+                        gain.gain.exponentialRampToValueAtTime(0.0001, now + 3.6 - idx * 0.5);
+
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(now);
+                        osc.stop(now + 3.7);
+                    });
+                } catch (e) {}
+            }
+            playWoodenFish(broadcastSync = false) {
+                if (broadcastSync) {
+                    sendSyncCommand('PLAY_WOODEN_FISH', {});
+                }
+                if (isLocalTabMuted) return;
+                try {
+                    this.init();
+                    const now = this.ctx.currentTime;
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(590, now);
+                    osc.frequency.exponentialRampToValueAtTime(310, now + 0.085);
+
+                    gain.gain.setValueAtTime(0.001, now);
+                    gain.gain.linearRampToValueAtTime(0.32 * config.ttsVolume, now + 0.008);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.13);
+                } catch (e) {}
+            }
+        }
+
+        const soundEngine = new TempleSoundEngine();
+
+        const ttsQueue = [];
+        let isSpeaking = false;
+        let availableSystemVoices = [];
+        let currentAudioElement = null;
+
+        function populateSystemVoices() {
+            if (!('speechSynthesis' in window)) return;
+            availableSystemVoices = window.speechSynthesis.getVoices() || [];
+            const selectEl = document.getElementById('system-voice-select');
+            if (!selectEl) return;
+
+            const currentVal = config.selectedSystemVoiceURI;
+            selectEl.innerHTML = '<option value="">-- Tự động ưu tiên giọng Tiếng Việt (vi-VN) --</option>';
+
+            const sorted = [...availableSystemVoices].sort((a, b) => {
+                const aVi = a.lang.toLowerCase().includes('vi') ? 1 : 0;
+                const bVi = b.lang.toLowerCase().includes('vi') ? 1 : 0;
+                return bVi - aVi;
+            });
+
+            sorted.forEach(v => {
+                const isVi = v.lang.toLowerCase().includes('vi');
+                const opt = document.createElement('option');
+                opt.value = v.voiceURI;
+                opt.textContent = `${isVi ? '🇻🇳 ' : '🌐 '}${v.name} (${v.lang})`;
+                if (v.voiceURI === currentVal) opt.selected = true;
+                selectEl.appendChild(opt);
+            });
+        }
+
+        if ('speechSynthesis' in window) {
+            populateSystemVoices();
+            window.speechSynthesis.onvoiceschanged = populateSystemVoices;
+        }
+
+        function onTTSEngineChange(engine, shouldSync = true) {
+            config.ttsEngine = engine;
+            const nodeBox = document.getElementById('node-tts-options');
+            const sysBox = document.getElementById('system-voice-options');
+            const desc = document.getElementById('tts-engine-desc');
+
+            nodeBox.classList.add('hidden');
+            sysBox.classList.add('hidden');
+
+            if (engine === 'node_edge') {
+                nodeBox.classList.remove('hidden');
+                desc.innerHTML = '🎙️ <b>Node.js Edge-TTS AI:</b> Giọng Nữ <b>HoaiMyNeural</b> / Nam <b>NamMinhNeural</b> truyền cảm miễn phí 100%, phát qua HTML5 Audio nên <b>OBS Browser Source</b> thu được tiếng trực tiếp.';
+            } else if (engine === 'google_stream') {
+                desc.innerHTML = '🌐 <b>Chị Google Stream:</b> Phát luồng âm thanh Google Translate Tiếng Việt trực tiếp, tương thích với OBS Browser Source.';
+            } else if (engine === 'web_speech') {
+                sysBox.classList.remove('hidden');
+                desc.innerHTML = '⚡ <b>Web Speech API:</b> Có sẵn trong trình duyệt Chrome/Edge, tốn 0% CPU và không bao giờ giới hạn lượt đọc.';
+            } else if (engine === 'monk_zen') {
+                sysBox.classList.remove('hidden');
+                desc.innerHTML = '🧘 <b>Giọng Thầy Chùa Trầm Ấm:</b> Hạ trầm âm sắc (Pitch 0.72, Tốc độ 0.88x) kết hợp tiếng gõ mõ mở đầu mang lại không khí trang nghiêm.';
+            }
+            if (shouldSync) {
+                sendSyncCommand('UPDATE_CONFIG', { ttsEngine: engine });
+            }
+        }
+
+        function updateTTSParam(param, val) {
+            const num = parseFloat(val);
+            if (param === 'rate') {
+                config.ttsRate = num;
+                document.getElementById('lbl-tts-rate').textContent = num.toFixed(2) + 'x';
+            } else if (param === 'pitch') {
+                config.ttsPitch = num;
+                document.getElementById('lbl-tts-pitch').textContent = num.toFixed(2);
+            } else if (param === 'volume') {
+                config.ttsVolume = num;
+                document.getElementById('lbl-tts-vol').textContent = Math.round(num * 100) + '%';
+            }
+            sendSyncCommand('UPDATE_CONFIG', {
+                ttsRate: config.ttsRate,
+                ttsPitch: config.ttsPitch,
+                ttsVolume: config.ttsVolume
+            });
+        }
+
+        function formatPrayerSpeech(username, prayer, isVip) {
+            const tpl = config.ttsTemplate || 'Phật tử {name} thành tâm cầu nguyện: {prayer}';
+            const prefix = isVip ? 'Nam mô A Di Đà Phật. ' : '';
+            return prefix + tpl.replace('{name}', username).replace('{prayer}', prayer);
+        }
+
+        function testSelectedTTSVoice() {
+            const sampleText = formatPrayerSpeech('Nguyễn Thị Yến Nhi', 'Cầu cho gia đình năm nay bình an, vạn sự hanh thông', true);
+            sendSyncCommand('TEST_TTS', { text: sampleText });
+            enqueueTTS(sampleText, true);
+        }
+
+        function setTTSStatusBadge(text, active = false) {
+            const badge = document.getElementById('tts-active-status');
+            if (!badge) return;
+            badge.textContent = text;
+            badge.className = active
+                ? 'px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/50 text-[10px] font-bold animate-pulse'
+                : 'px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-700/50 text-[10px] font-semibold';
+        }
+
+        function enqueueTTS(text, isPriority = false) {
+            if (!config.ttsEnabled) return;
+            if (isLocalTabMuted) return;
+            if (config.ttsVipOnly && !isPriority) return;
+
+            if (isPriority) {
+                ttsQueue.unshift(text);
+            } else {
+                if (ttsQueue.length >= 4) ttsQueue.pop();
+                ttsQueue.push(text);
+            }
+            processTTSQueue();
+        }
+
+        function processTTSQueue() {
+            if (isSpeaking || ttsQueue.length === 0) return;
+            const nextText = ttsQueue.shift();
+            isSpeaking = true;
+            setTTSStatusBadge('🔊 Đang đọc...', true);
+
+            const finishCallback = () => {
+                isSpeaking = false;
+                setTTSStatusBadge('Sẵn sàng', false);
+                setTimeout(processTTSQueue, 180);
+            };
+
+            if (config.ttsEngine === 'node_edge') {
+                playViaNodeEdgeTTS(nextText, finishCallback);
+            } else if (config.ttsEngine === 'google_stream') {
+                playViaGoogleStreamTTS(nextText, finishCallback);
+            } else if (config.ttsEngine === 'monk_zen') {
+                soundEngine.playWoodenFish();
+                playViaWebSpeechAPI(nextText, finishCallback, { rate: 0.88, pitch: 0.72 });
+            } else {
+                playViaWebSpeechAPI(nextText, finishCallback);
+            }
+        }
+
+        function playViaNodeEdgeTTS(text, onDone) {
+            const endpoint = config.nodeTtsEndpoint || 'http://localhost:3000/tts';
+            const url = `${endpoint}?voice=${encodeURIComponent(config.nodeVoice)}&text=${encodeURIComponent(text)}`;
+            const audio = new Audio(url);
+            currentAudioElement = audio;
+            audio.volume = config.ttsVolume;
+            audio.playbackRate = config.ttsRate;
+            audio.onended = onDone;
+            audio.onerror = () => {
+                setTTSStatusBadge('⚡ Fallback WebSpeech', true);
+                playViaWebSpeechAPI(text, onDone);
+            };
+            audio.play().catch(() => {
+                playViaWebSpeechAPI(text, onDone);
+            });
+        }
+
+        function playViaGoogleStreamTTS(text, onDone) {
+            const shortText = text.slice(0, 180);
+            const gUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(shortText)}`;
+            const audio = new Audio(gUrl);
+            currentAudioElement = audio;
+            audio.volume = config.ttsVolume;
+            audio.playbackRate = config.ttsRate;
+            audio.onended = onDone;
+            audio.onerror = () => {
+                playViaWebSpeechAPI(text, onDone);
+            };
+            audio.play().catch(() => {
+                playViaWebSpeechAPI(text, onDone);
+            });
+        }
+
+        function playViaWebSpeechAPI(text, onDone, override = {}) {
+            if (!('speechSynthesis' in window)) {
+                onDone();
+                return;
+            }
+            try {
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'vi-VN';
+                utter.rate = override.rate || config.ttsRate;
+                utter.pitch = override.pitch || config.ttsPitch;
+                utter.volume = config.ttsVolume;
+
+                const voices = window.speechSynthesis.getVoices();
+                let chosen = null;
+                if (config.selectedSystemVoiceURI) {
+                    chosen = voices.find(v => v.voiceURI === config.selectedSystemVoiceURI);
+                }
+                if (!chosen) {
+                    chosen = voices.find(v => v.lang.toLowerCase().includes('vi'));
+                }
+                if (chosen) utter.voice = chosen;
+
+                utter.onend = onDone;
+                utter.onerror = onDone;
+                window.speechSynthesis.speak(utter);
+            } catch (err) {
+                onDone();
+            }
+        }
+
+        /********************************************************************
+         * 4. XÂY DỰNG MA TRẬN VỊ TRÍ QUỲ (PERSPECTIVE SLOTS) & NHÂN VẬT 2.5D
+         ********************************************************************/
+        function rebuildNormalSlots() {
+            const { rows, cols, yTop, yBottom, topWidth, bottomWidth } = config.grid;
+            const newSlots = [];
+            const centerX = 270;
+
+            for (let r = 0; r < rows; r++) {
+                const t = rows > 1 ? r / (rows - 1) : 0;
+                const y = Math.round(yTop + t * (yBottom - yTop));
+                const rowW = topWidth + t * (bottomWidth - topWidth);
+                const startX = centerX - rowW / 2;
+
+                for (let c = 0; c < cols; c++) {
+                    const colFrac = cols > 1 ? c / (cols - 1) : 0.5;
+                    const stagger = (r % 2 === 1) ? (rowW / cols) * 0.18 : -(rowW / cols) * 0.18;
+                    const x = Math.round(startX + colFrac * rowW + stagger);
+                    newSlots.push({
+                        id: `slot-${r}-${c}`,
+                        row: r,
+                        col: c,
+                        x: Math.max(45, Math.min(495, x)),
+                        y,
+                        isVip: false,
+                        occupiedBy: null
+                    });
+                }
+            }
+
+            normalSlots = newSlots;
+            pilgrims.forEach(p => {
+                if (!p.isVip && p.state !== 'leave') {
+                    const free = normalSlots.find(s => !s.occupiedBy);
+                    if (free) {
+                        free.occupiedBy = p;
+                        p.slot = free;
+                        p.targetX = free.x;
+                        p.targetY = free.y;
+                    }
+                }
+            });
+
+            renderWaypointsLayer();
+        }
+
+        function createPilgrimSVG(isVip, hairSeed) {
+            const robeMain = isVip ? '#64748b' : '#78869b';
+            const robeShadow = isVip ? '#475569' : '#526075';
+            const sashGold = isVip
+                ? `<path d="M21 38 L43 68 L37 72 L17 42 Z" fill="#facc15" opacity="0.9"/>`
+                : '';
+
+            return `
+            <svg class="pilgrim-sprite w-full h-full overflow-visible" viewBox="0 0 64 96">
+                <ellipse cx="32" cy="88" rx="18" ry="6" fill="rgba(0,0,0,0.48)"/>
+                <path d="M16 62 Q32 56 48 62 L52 87 Q32 92 12 87 Z" fill="${robeShadow}" stroke="#334155" stroke-width="1.2"/>
+                <g class="pilgrim-head-torso">
+                    <path d="M18 36 Q32 32 46 36 L49 68 Q32 73 15 68 Z" fill="${robeMain}" stroke="#334155" stroke-width="1.2"/>
+                    <path d="M18 37 Q10 48 13 60 L21 58 L21 42 Z" fill="${robeShadow}"/>
+                    <path d="M46 37 Q54 48 51 60 L43 58 L43 42 Z" fill="${robeShadow}"/>
+                    ${sashGold}
+                    <path d="M25 34 Q32 39 39 34" fill="none" stroke="#e2e8f0" stroke-width="2"/>
+                    <circle cx="32" cy="21" r="10.5" fill="#1c1917"/>
+                    <circle cx="32" cy="${hairSeed % 2 === 0 ? 18 : 22}" r="5.5" fill="#0c0a09" stroke="#44403c" stroke-width="1"/>
+                    ${isVip ? '<circle cx="32" cy="18" r="7" fill="none" stroke="#facc15" stroke-width="1.4" opacity="0.85"/>' : ''}
+                </g>
+            </svg>`;
+        }
+
+        class Pilgrim {
+            constructor({ username, prayer, isVip, coins, slot, isBot = false }) {
+                this.id = pilgrimIdCounter++;
+                this.username = username;
+                this.prayer = prayer;
+                this.isVip = isVip;
+                this.isBot = isBot;
+                this.coins = coins || 0;
+                this.slot = slot;
+                this.slot.occupiedBy = this;
+
+                this.x = config.spawnPoint.x + (Math.random() * 140 - 70);
+                this.y = config.spawnPoint.y;
+                this.targetX = slot.x;
+                this.targetY = slot.y;
+
+                this.speed = isVip ? 145 : (110 + Math.random() * 30);
+                this.state = 'walk';
+                this.prayTimer = config.prayDurationSec + (Math.random() * 6 - 3);
+
+                this.el = document.createElement('div');
+                this.el.className = `pilgrim-entity state-walk`;
+
+                const avatarInitial = (username || 'P').trim().charAt(0).toUpperCase();
+                const avatarColors = ['#d97706', '#059669', '#2563eb', '#db2777', '#7c3aed', '#dc2626'];
+                const badgeColor = avatarColors[this.id % avatarColors.length];
+
+                this.el.innerHTML = `
+                    <div class="prayer-bubble ${isVip ? 'vip-bubble' : ''}">${this.escapeHTML(prayer)}</div>
+                    ${createPilgrimSVG(isVip, this.id)}
+                    <div class="nameplate-tag ${isVip ? 'vip-tag' : ''}">
+                        <span class="w-3.5 h-3.5 rounded-full flex items-center justify-center text-[8px] font-black text-white" style="background:${badgeColor}">${this.escapeHTML(avatarInitial)}</span>
+                        <span class="max-w-[85px] truncate">${this.escapeHTML(username)}</span>
+                        ${isVip ? '<span>🪷</span>' : '<span class="text-rose-400">♥</span>'}
+                    </div>
+                `;
+
+                document.getElementById('pilgrims-layer').appendChild(this.el);
+                this.updateTransform();
+            }
+
+            escapeHTML(str) {
+                return String(str).replace(/[&<>"']/g, m => ({
+                    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                }[m]));
+            }
+
+            getDepthScale() {
+                const t = Math.max(0, Math.min(1, (this.y - 380) / (920 - 380)));
+                return 0.58 + t * 0.44;
+            }
+
+            updateTransform() {
+                const scale = this.getDepthScale();
+                this.el.style.left = `${this.x - 32}px`;
+                this.el.style.top = `${this.y - 88}px`;
+                this.el.style.transform = `scale(${scale.toFixed(3)})`;
+                this.el.style.zIndex = Math.round(this.y);
+            }
+
+            startLeaving() {
+                if (this.state === 'leave') return;
+                this.state = 'leave';
+                if (this.slot) {
+                    this.slot.occupiedBy = null;
+                    this.slot = null;
+                }
+                this.el.classList.remove('state-pray');
+                this.el.classList.add('state-walk');
+
+                const bubble = this.el.querySelector('.prayer-bubble');
+                if (bubble) bubble.textContent = 'Ra về 🙏';
+
+                const exitSide = this.x < 270 ? config.exitLeft : config.exitRight;
+                this.targetX = exitSide.x;
+                this.targetY = this.y + 35;
+            }
+
+            update(dt) {
+                if (this.state === 'walk' || this.state === 'leave') {
+                    const dx = this.targetX - this.x;
+                    const dy = this.targetY - this.y;
+                    const dist = Math.hypot(dx, dy);
+
+                    if (dist < 4) {
+                        this.x = this.targetX;
+                        this.y = this.targetY;
+                        if (this.state === 'walk') {
+                            this.state = 'pray';
+                            this.el.classList.remove('state-walk');
+                            this.el.classList.add('state-pray');
+                        } else {
+                            this.destroy();
+                            return false;
+                        }
+                    } else {
+                        const step = Math.min(dist, this.speed * dt);
+                        this.x += (dx / dist) * step;
+                        this.y += (dy / dist) * step;
+                    }
+                    this.updateTransform();
+                } else if (this.state === 'pray') {
+                    if (this.slot) {
+                        this.x += (this.slot.x - this.x) * 0.15;
+                        this.y += (this.slot.y - this.y) * 0.15;
+                        this.updateTransform();
+                    }
+                    this.prayTimer -= dt;
+                    if (this.prayTimer <= 0) {
+                        this.startLeaving();
+                    }
+                }
+                return true;
+            }
+
+            destroy() {
+                if (this.slot && this.slot.occupiedBy === this) {
+                    this.slot.occupiedBy = null;
+                }
+                if (this.el && this.el.parentNode) {
+                    this.el.parentNode.removeChild(this.el);
+                }
+            }
+        }
+
+        /********************************************************************
+         * 5. QUẢN LÝ ĐIỀU PHỐI CHỖ QUỲ & HÀNG ĐỢI (CROWD DISPATCHER)
+         ********************************************************************/
+        let lastBotTTSTime = 0;
+
+        function requestSpawnPilgrim({ username, prayer, isVip = false, coins = 0, playSound = true, isBot = false, broadcastSync = false, fromSync = false }) {
+            if (broadcastSync && !fromSync) {
+                sendSyncCommand('SPAWN_PILGRIM', { username, prayer, isVip, coins, playSound, isBot });
+            }
+
+            const filterResult = isBot
+                ? { allowed: true, allowTTS: true, safeUsername: username, safePrayer: prayer }
+                : safetyFilter.inspectInteraction(username, prayer, true);
+
+            if (!filterResult.allowed) {
+                return;
+            }
+
+            const finalUsername = filterResult.safeUsername;
+            const finalPrayer = filterResult.safePrayer;
+
+            const joinText = document.getElementById('join-toast-text');
+            if (joinText) joinText.textContent = `${finalUsername} đã tham gia`;
+
+            const speechLine = formatPrayerSpeech(finalUsername, finalPrayer, isVip);
+            const nowSec = performance.now() / 1000;
+
+            if (!isBot) {
+                if (isVip || coins > 0) {
+                    addDonorScore(finalUsername, coins || 5);
+                    const giftToast = document.getElementById('gift-toast-text');
+                    const giftName = coins >= 10 ? 'Lư Hương Vàng 🏮' : (coins >= 5 ? 'Hoa Sen 🪷' : 'Hoa Hồng 🌹');
+                    if (giftToast) giftToast.textContent = `${finalUsername} đã gửi ${giftName} x1`;
+                    if (playSound) soundEngine.playBell();
+                    if (filterResult.allowTTS) enqueueTTS(speechLine, true);
+                } else {
+                    if (playSound) soundEngine.playWoodenFish();
+                    if (filterResult.allowTTS) enqueueTTS(speechLine, false);
+                }
+            } else {
+                if (config.botSpeakTTS && !isSpeaking && ttsQueue.length === 0 && (nowSec - lastBotTTSTime > 12)) {
+                    lastBotTTSTime = nowSec;
+                    if (isVip) {
+                        soundEngine.playBell();
+                        const giftToast = document.getElementById('gift-toast-text');
+                        if (giftToast) giftToast.textContent = `${finalUsername} thành tâm dâng Hoa Sen 🪷`;
+                    } else {
+                        soundEngine.playWoodenFish();
+                    }
+                    enqueueTTS(speechLine, false);
+                } else if (playSound) {
+                    soundEngine.playWoodenFish();
+                }
+            }
+
+            const targetPool = isVip ? vipSlots : normalSlots;
+            let freeSlots = targetPool.filter(s => !s.occupiedBy);
+
+            if (freeSlots.length === 0 && !isBot) {
+                const botToYield = pilgrims.find(p => p.isBot && p.state === 'pray' && p.isVip === isVip)
+                    || pilgrims.find(p => p.isBot && p.state === 'pray');
+                if (botToYield && botToYield.slot) {
+                    const freedSlot = botToYield.slot;
+                    botToYield.startLeaving();
+                    freeSlots = [freedSlot];
+                }
+            }
+
+            let chosenSlot = null;
+            if (freeSlots.length > 0) {
+                chosenSlot = freeSlots[Math.floor(Math.random() * freeSlots.length)];
+            } else if (isVip) {
+                const normalFree = normalSlots.filter(s => !s.occupiedBy);
+                if (normalFree.length > 0) {
+                    chosenSlot = normalFree[0];
+                }
+            }
+
+            if (chosenSlot) {
+                const p = new Pilgrim({ username: finalUsername, prayer: finalPrayer, isVip, coins, slot: chosenSlot, isBot });
+                pilgrims.push(p);
+            } else if (!isBot) {
+                const oldestPraying = pilgrims.find(p => p.state === 'pray' && (!isVip || !p.isVip));
+                if (oldestPraying) {
+                    oldestPraying.startLeaving();
+                }
+                waitingQueue.push({ username: finalUsername, prayer: finalPrayer, isVip, coins, isBot: false });
+            }
+
+            updateCountersHUD();
+        }
+
+        function processWaitingQueue() {
+            if (waitingQueue.length === 0) return;
+            for (let i = 0; i < waitingQueue.length; i++) {
+                const req = waitingQueue[i];
+                const pool = req.isVip ? vipSlots : normalSlots;
+                const free = pool.filter(s => !s.occupiedBy);
+                if (free.length > 0) {
+                    waitingQueue.splice(i, 1);
+                    const slot = free[Math.floor(Math.random() * free.length)];
+                    const p = new Pilgrim({ ...req, slot });
+                    pilgrims.push(p);
+                    updateCountersHUD();
+                    break;
+                }
+            }
+        }
+
+        function addDonorScore(username, coins) {
+            const current = donorsMap.get(username) || 0;
+            donorsMap.set(username, current + coins);
+            renderLeaderboard();
+        }
+
+        function renderLeaderboard() {
+            const listEl = document.getElementById('leaderboard-list');
+            if (!listEl) return;
+            const sorted = [...donorsMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+            const medals = ['🥇', '🥈', '🥉', '4.'];
+            listEl.innerHTML = sorted.map(([name, score], idx) => `
+                <div class="flex items-center justify-between text-stone-200">
+                    <span class="truncate max-w-[118px]"><b class="text-amber-300">${medals[idx]}</b> ${name}</span>
+                    <span class="font-bold text-amber-400">${score}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateCountersHUD() {
+            const count = pilgrims.length;
+            const botCount = pilgrims.filter(p => p.isBot).length;
+            const realCount = count - botCount;
+
+            const elHud = document.getElementById('hud-active-pilgrims');
+            const elDev = document.getElementById('dev-count-pilgrims');
+            const elQueue = document.getElementById('dev-queue-count');
+            const elRealStat = document.getElementById('stat-real-count');
+            const elBotStat = document.getElementById('stat-bot-count');
+
+            if (elHud) elHud.textContent = count;
+            if (elDev) elDev.textContent = count;
+            if (elQueue) elQueue.textContent = waitingQueue.length;
+            if (elRealStat) elRealStat.textContent = `${realCount} Người thật`;
+            if (elBotStat) elBotStat.textContent = `${botCount} Phật tử ảo`;
+        }
+
+        /********************************************************************
+         * 6. HIỆU ỨNG KHÓI HƯƠNG LƯ ĐỒNG & THẢM QUỲ TRÊN CANVAS
+         ********************************************************************/
+        const canvas = document.getElementById('fx-canvas');
+        const ctx = canvas.getContext('2d');
+        const smokeParticles = [];
+        const floatingLotuses = [];
+
+        function initParticles() {
+            for (let i = 0; i < 42; i++) {
+                smokeParticles.push(createSmokeParticle(true));
+            }
+            for (let i = 0; i < 12; i++) {
+                floatingLotuses.push({
+                    x: Math.random() * 540,
+                    y: Math.random() * 420,
+                    r: 1.5 + Math.random() * 2.5,
+                    vy: -12 - Math.random() * 15,
+                    alpha: 0.3 + Math.random() * 0.6
+                });
+            }
+        }
+
+        function createSmokeParticle(randomProgress = false) {
+            const progress = randomProgress ? Math.random() : 0;
+            return {
+                x: config.incenseBurner.x + (Math.random() * 18 - 9),
+                y: config.incenseBurner.y - progress * 220,
+                vx: (Math.random() - 0.5) * 14,
+                vy: -28 - Math.random() * 22,
+                size: 8 + progress * 34,
+                alpha: (1 - progress) * 0.36,
+                life: progress,
+                speed: 0.25 + Math.random() * 0.18
+            };
+        }
+
+        function renderCanvasEffects(dt, timeSec) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            vipSlots.forEach(s => {
+                ctx.save();
+                ctx.beginPath();
+                ctx.ellipse(s.x, s.y + 4, 24, 9, 0, 0, Math.PI * 2);
+                ctx.fillStyle = '#991b1b';
+                ctx.fill();
+                ctx.lineWidth = 1.8;
+                ctx.strokeStyle = '#fbbf24';
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            normalSlots.forEach(s => {
+                const scale = 0.55 + ((s.y - 450) / 450) * 0.45;
+                ctx.save();
+                ctx.beginPath();
+                ctx.ellipse(s.x, s.y + 3, 18 * scale, 6.5 * scale, 0, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(127, 29, 29, 0.68)';
+                ctx.fill();
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = 'rgba(245, 158, 11, 0.45)';
+                ctx.stroke();
+                ctx.restore();
+            });
+
+            smokeParticles.forEach((p, idx) => {
+                p.life += p.speed * dt;
+                if (p.life >= 1) {
+                    smokeParticles[idx] = createSmokeParticle(false);
+                    return;
+                }
+                p.x += Math.sin(timeSec * 2 + idx) * 12 * dt + p.vx * dt;
+                p.y += p.vy * dt;
+                p.size = 8 + p.life * 38;
+                const alpha = Math.sin(p.life * Math.PI) * 0.32;
+
+                const grad = ctx.createRadialGradient(p.x, p.y, 1, p.x, p.y, p.size);
+                grad.addColorStop(0, `rgba(255, 250, 240, ${alpha})`);
+                grad.addColorStop(1, 'rgba(255, 250, 240, 0)');
+                ctx.fillStyle = grad;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            floatingLotuses.forEach(sp => {
+                sp.y += sp.vy * dt;
+                if (sp.y < 30) {
+                    sp.y = 420;
+                    sp.x = 60 + Math.random() * 420;
+                }
+                ctx.fillStyle = `rgba(253, 224, 71, ${sp.alpha})`;
+                ctx.beginPath();
+                ctx.arc(sp.x, sp.y, sp.r, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+
+        /********************************************************************
+         * 7. CHẾ ĐỘ SỬA MAP & KÉO THẢ WAYPOINTS TRỰC TIẾP TRÊN MÀN HÌNH
+         ********************************************************************/
+        function toggleEditWaypoints() {
+            config.showWaypoints = !config.showWaypoints;
+            const layer = document.getElementById('waypoints-layer');
+            const btnQuick = document.getElementById('btn-quick-waypoint');
+            const btnTab = document.getElementById('btn-tab-waypoint');
+
+            if (config.showWaypoints) {
+                layer.classList.remove('hidden');
+                btnQuick.innerHTML = '<span>✅</span> <span>Đang Bật Lưới Tọa Độ</span>';
+                btnTab.textContent = 'Tắt Lưới Tọa Độ';
+                renderWaypointsLayer();
+            } else {
+                layer.classList.add('hidden');
+                btnQuick.innerHTML = '<span>🎯</span> <span>Bật Lưới Tọa Độ</span>';
+                btnTab.textContent = 'Bật Lưới Tọa Độ';
+            }
+        }
+
+        function renderWaypointsLayer() {
+            const layer = document.getElementById('waypoints-layer');
+            if (!layer) return;
+            layer.innerHTML = '';
+
+            const burnerNode = document.createElement('div');
+            burnerNode.className = 'waypoint-node bg-rose-500 text-white border-2 border-white';
+            burnerNode.style.left = `${config.incenseBurner.x}px`;
+            burnerNode.style.top = `${config.incenseBurner.y}px`;
+            burnerNode.title = 'Kéo để chỉnh vị trí Khói Lư Hương';
+            burnerNode.textContent = '🔥';
+            makeNodeDraggable(burnerNode, (nx, ny) => {
+                config.incenseBurner.x = nx;
+                config.incenseBurner.y = ny;
+                const burnerArt = document.getElementById('incense-burner-art');
+                if (burnerArt) {
+                    burnerArt.style.left = `${nx}px`;
+                    burnerArt.style.top = `${ny - 33}px`;
+                }
+                sendSyncCommand('UPDATE_WAYPOINT', { kind: 'burner', x: nx, y: ny });
+            });
+            layer.appendChild(burnerNode);
+
+            vipSlots.forEach((slot, i) => {
+                const node = document.createElement('div');
+                node.className = 'waypoint-node bg-amber-400 text-stone-950 border-2 border-white';
+                node.style.left = `${slot.x}px`;
+                node.style.top = `${slot.y}px`;
+                node.title = `Vị trí VIP #${i + 1} (Kéo để di chuyển)`;
+                node.textContent = `V${i + 1}`;
+                makeNodeDraggable(node, (nx, ny) => {
+                    slot.x = nx;
+                    slot.y = ny;
+                    sendSyncCommand('UPDATE_WAYPOINT', { kind: 'vip', index: i, x: nx, y: ny });
+                });
+                layer.appendChild(node);
+            });
+
+            normalSlots.forEach((slot, i) => {
+                const node = document.createElement('div');
+                node.className = 'waypoint-node bg-emerald-500/90 text-stone-950 border border-white';
+                node.style.left = `${slot.x}px`;
+                node.style.top = `${slot.y}px`;
+                node.title = `Chiếu quỳ #${i + 1} (Kéo để tinh chỉnh)`;
+                node.textContent = i + 1;
+                makeNodeDraggable(node, (nx, ny) => {
+                    slot.x = nx;
+                    slot.y = ny;
+                    sendSyncCommand('UPDATE_WAYPOINT', { kind: 'normal', index: i, x: nx, y: ny });
+                });
+                layer.appendChild(node);
+            });
+        }
+
+        function applySyncedWaypoint(payload) {
+            if (!payload) return;
+            if (payload.kind === 'burner') {
+                config.incenseBurner.x = payload.x;
+                config.incenseBurner.y = payload.y;
+                const burnerArt = document.getElementById('incense-burner-art');
+                if (burnerArt) {
+                    burnerArt.style.left = `${payload.x}px`;
+                    burnerArt.style.top = `${payload.y - 33}px`;
+                }
+            } else if (payload.kind === 'vip' && vipSlots[payload.index]) {
+                vipSlots[payload.index].x = payload.x;
+                vipSlots[payload.index].y = payload.y;
+            } else if (payload.kind === 'normal' && normalSlots[payload.index]) {
+                normalSlots[payload.index].x = payload.x;
+                normalSlots[payload.index].y = payload.y;
+            }
+        }
+
+        function makeNodeDraggable(el, onMove) {
+            let dragging = false;
+            const viewport = document.getElementById('game-viewport');
+
+            const startDrag = (e) => {
+                e.stopPropagation();
+                dragging = true;
+            };
+            const moveDrag = (e) => {
+                if (!dragging) return;
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const rect = viewport.getBoundingClientRect();
+                const scaleX = 540 / rect.width;
+                const scaleY = 960 / rect.height;
+                const nx = Math.round(Math.max(20, Math.min(520, (clientX - rect.left) * scaleX)));
+                const ny = Math.round(Math.max(150, Math.min(930, (clientY - rect.top) * scaleY)));
+                el.style.left = `${nx}px`;
+                el.style.top = `${ny}px`;
+                onMove(nx, ny);
+            };
+            const endDrag = () => {
+                dragging = false;
+            };
+
+            el.addEventListener('mousedown', startDrag);
+            window.addEventListener('mousemove', moveDrag);
+            window.addEventListener('mouseup', endDrag);
+
+            el.addEventListener('touchstart', startDrag, { passive: true });
+            window.addEventListener('touchmove', moveDrag, { passive: true });
+            window.addEventListener('touchend', endDrag);
+        }
+
+        /********************************************************************
+         * 8. CÁC HÀM ĐIỀU KHIỂN TRONG BẢNG DEV & GIẢ LẬP SỰ KIỆN
+         ********************************************************************/
+        function spawnRandomPilgrim(isVip = false, silent = false, broadcastSync = false, isBot = false) {
+            const username = sampleNames[Math.floor(Math.random() * sampleNames.length)];
+            const prayer = samplePrayers[Math.floor(Math.random() * samplePrayers.length)];
+            const coins = isVip ? [1, 5, 10, 25][Math.floor(Math.random() * 4)] : 0;
+            requestSpawnPilgrim({ username, prayer, isVip, coins, playSound: !silent, isBot, broadcastSync });
+        }
+
+        function spawnBatchPilgrims(count = 15, broadcastSync = false) {
+            if (broadcastSync) {
+                sendSyncCommand('SPAWN_BATCH', { count });
+            }
+            soundEngine.playBell();
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const isVip = i < 2;
+                    spawnRandomPilgrim(isVip, true, false, true);
+                }, i * 110);
+            }
+        }
+
+        function updateBotSetting(key, val) {
+            if (key === 'botTargetCrowd') {
+                config.botTargetCrowd = parseInt(val, 10);
+                document.getElementById('lbl-bot-target').textContent = `${config.botTargetCrowd} người`;
+            } else if (key === 'botVipPercent') {
+                config.botVipPercent = parseInt(val, 10);
+                document.getElementById('lbl-bot-vip-rate').textContent = `${config.botVipPercent}%`;
+            } else if (key === 'botSpeakTTS') {
+                config.botSpeakTTS = Boolean(val);
+            }
+            sendSyncCommand('UPDATE_CONFIG', { [key]: config[key] });
+        }
+
+        function makeAllPilgrimsLeave(broadcastSync = false) {
+            if (broadcastSync) {
+                sendSyncCommand('LEAVE_ALL', {});
+            }
+            pilgrims.forEach(p => p.startLeaving());
+        }
+
+        function spawnCustomPilgrim() {
+            const username = document.getElementById('sim-username').value.trim() || 'Phật Tử Ẩn Danh';
+            const prayer = document.getElementById('sim-prayer').value.trim() || 'Nam Mô A Di Đà Phật 🙏';
+            const isVip = document.getElementById('sim-is-vip').checked;
+            requestSpawnPilgrim({ username, prayer, isVip, coins: isVip ? 10 : 0, playSound: true, isBot: false, broadcastSync: true });
+        }
+
+        function toggleAutoCrowd(enabled) {
+            config.autoCrowd = enabled;
+            sendSyncCommand('UPDATE_CONFIG', { autoCrowd: enabled });
+        }
+
+        function updateGridConfig(key, value) {
+            config.grid[key] = parseInt(value, 10);
+            document.getElementById('lbl-grid-ytop').textContent = `${config.grid.yTop}px`;
+            document.getElementById('lbl-grid-ybottom').textContent = `${config.grid.yBottom}px`;
+            document.getElementById('lbl-grid-rows').textContent = `${config.grid.rows} hàng`;
+            document.getElementById('lbl-grid-cols').textContent = `${config.grid.cols} người`;
+            rebuildNormalSlots();
+            sendSyncCommand('UPDATE_GRID', config.grid);
+        }
+
+        function updatePrayDuration(val) {
+            config.prayDurationSec = parseInt(val, 10);
+            document.getElementById('lbl-pray-duration').textContent = `${config.prayDurationSec} giây`;
+            sendSyncCommand('UPDATE_CONFIG', { prayDurationSec: config.prayDurationSec });
+        }
+
+        function handleBackgroundUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            const imgEl = document.getElementById('custom-bg-img');
+            const defaultArt = document.getElementById('default-temple-art');
+            imgEl.src = url;
+            imgEl.classList.remove('hidden');
+            defaultArt.classList.add('opacity-10');
+        }
+
+        function resetDefaultBackground() {
+            const imgEl = document.getElementById('custom-bg-img');
+            const defaultArt = document.getElementById('default-temple-art');
+            imgEl.src = '';
+            imgEl.classList.add('hidden');
+            defaultArt.classList.remove('opacity-10');
+        }
+
+        function exportMapConfig() {
+            const data = {
+                incenseBurner: config.incenseBurner,
+                grid: config.grid,
+                vipSlots: vipSlots.map(s => ({ id: s.id, x: s.x, y: s.y })),
+                normalSlots: normalSlots.map(s => ({ id: s.id, x: s.x, y: s.y }))
+            };
+            const jsonStr = JSON.stringify(data, null, 2);
+            const out = document.getElementById('map-json-output');
+            out.value = jsonStr;
+            out.select();
+            document.execCommand('copy');
+            showCopyFeedback('Đã copy JSON tọa độ!');
+        }
+
+        function copyNodeServerCode() {
+            const code = document.getElementById('node-code-block').innerText;
+            const temp = document.createElement('textarea');
+            temp.value = code;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            showCopyFeedback('Đã copy code server.js!');
+        }
+
+        function showCopyFeedback(msg) {
+            const el = document.getElementById('toast-copy-feedback');
+            if (!el) return;
+            el.textContent = msg;
+            setTimeout(() => { el.textContent = ''; }, 3000);
+        }
+
+        function switchDevTab(tab) {
+            ['sim', 'filter', 'map', 'tiktok'].forEach(t => {
+                document.getElementById(`tab-content-${t}`).classList.toggle('hidden', t !== tab);
+                const btn = document.getElementById(`tab-btn-${t}`);
+                if (t === tab) {
+                    btn.className = 'py-2.5 border-b-2 border-amber-500 text-amber-400 bg-stone-900/80 flex items-center justify-center gap-1';
+                } else {
+                    btn.className = 'py-2.5 border-b-2 border-transparent text-stone-400 hover:text-stone-200 flex items-center justify-center gap-1';
+                }
+            });
+        }
+
+        function toggleDevPanel() {
+            const panel = document.getElementById('dev-panel');
+            const btnText = document.getElementById('btn-toggle-dev-text');
+            panel.classList.toggle('hidden');
+            const isHidden = panel.classList.contains('hidden');
+            btnText.textContent = isHidden ? 'Hiện Bảng Dev (F2)' : 'Ẩn Bảng Dev (F2)';
+            setTimeout(fitViewportToScreen, 60);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'F2') {
+                e.preventDefault();
+                toggleDevPanel();
+            }
+        });
+
+        /********************************************************************
+         * 9. KẾT NỐI WEBSOCKET VỚI NODE.JS (TIKTOK-LIVE-CONNECTOR)
+         ********************************************************************/
+        function connectTikTokWebSocket() {
+            const url = document.getElementById('ws-url-input').value.trim();
+            const badge = document.getElementById('ws-status-badge');
+            if (!url) return;
+
+            try {
+                if (wsConnection) wsConnection.close();
+                badge.textContent = '🟡 Đang kết nối...';
+                wsConnection = new WebSocket(url);
+
+                wsConnection.onopen = () => {
+                    badge.textContent = '🟢 Đã kết nối TikTok Live';
+                    badge.className = 'px-2 py-1 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-600';
+                };
+
+                wsConnection.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        if (data.type === 'ADMIN_SYNC') {
+                            handleIncomingSyncCommand(data);
+                        } else if (data.type === 'chat') {
+                            requestSpawnPilgrim({
+                                username: data.username || 'Phật tử',
+                                prayer: data.comment || 'Nam Mô A Di Đà Phật',
+                                isVip: false,
+                                coins: 0,
+                                playSound: true,
+                                isBot: false
+                            });
+                        } else if (data.type === 'gift') {
+                            requestSpawnPilgrim({
+                                username: data.username || 'Đại thí chủ',
+                                prayer: `Thành tâm cúng dường ${data.giftName || 'Vật phẩm'} 🙏`,
+                                isVip: true,
+                                coins: data.coins || 5,
+                                playSound: true,
+                                isBot: false
+                            });
+                        }
+                    } catch (err) {}
+                };
+
+                wsConnection.onclose = () => {
+                    badge.textContent = '⚪ Chế độ Giả Lập';
+                    badge.className = 'px-2 py-1 rounded text-[10px] font-bold bg-stone-800 text-stone-400 border border-stone-700';
+                };
+            } catch (err) {
+                badge.textContent = '🔴 Lỗi WebSocket';
+            }
+        }
+
+        /********************************************************************
+         * 10. TỰ ĐỘNG CO GIÃN KHUNG 9:16 VỪA MỌI MÀN HÌNH & GAME LOOP
+         ********************************************************************/
+        function fitViewportToScreen() {
+            const wrapper = document.getElementById('stream-stage-wrapper');
+            const viewport = document.getElementById('game-viewport');
+            if (!wrapper || !viewport) return;
+
+            const availW = wrapper.clientWidth - 12;
+            const availH = wrapper.clientHeight - 12;
+            const scale = Math.min(availW / 540, availH / 960, 1.15);
+            viewport.style.transform = `scale(${Math.max(0.25, scale)})`;
+        }
+
+        window.addEventListener('resize', fitViewportToScreen);
+
+        let lastTime = performance.now();
+        let autoSpawnTimer = 0;
+        let nextBotSpawnInterval = 2.0;
+
+        function gameLoop(now) {
+            const dt = Math.min(0.1, (now - lastTime) / 1000);
+            lastTime = now;
+            const elapsedSec = now / 1000;
+
+            for (let i = pilgrims.length - 1; i >= 0; i--) {
+                const alive = pilgrims[i].update(dt);
+                if (!alive) {
+                    pilgrims.splice(i, 1);
+                    updateCountersHUD();
+                }
+            }
+
+            processWaitingQueue();
+
+            if (config.autoCrowd) {
+                autoSpawnTimer += dt;
+                if (autoSpawnTimer >= nextBotSpawnInterval) {
+                    autoSpawnTimer = 0;
+                    nextBotSpawnInterval = 1.4 + Math.random() * 2.0;
+
+                    if (pilgrims.length < config.botTargetCrowd) {
+                        const isVip = (Math.random() * 100) < config.botVipPercent;
+                        spawnRandomPilgrim(isVip, true, false, true);
+                    }
+                }
+            }
+
+            renderCanvasEffects(dt, elapsedSec);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.onload = function () {
+            fitViewportToScreen();
+            rebuildNormalSlots();
+            renderLeaderboard();
+            initParticles();
+            initSafetyFilterUI();
+            updateLocalSilentTabUI();
+            sendSyncCommand('PING_HELLO', {});
+
+            for (let i = 0; i < 18; i++) {
+                const isVip = i < 3;
+                const username = sampleNames[i % sampleNames.length];
+                const prayer = samplePrayers[i % samplePrayers.length];
+                const pool = isVip ? vipSlots : normalSlots;
+                const free = pool.filter(s => !s.occupiedBy);
+                if (free.length > 0) {
+                    const slot = free[Math.floor(Math.random() * free.length)];
+                    const p = new Pilgrim({ username, prayer, isVip, coins: isVip ? 10 : 0, slot, isBot: true });
+                    if (i < 12) {
+                        p.x = slot.x;
+                        p.y = slot.y;
+                        p.state = 'pray';
+                        p.el.classList.remove('state-walk');
+                        p.el.classList.add('state-pray');
+                        p.updateTransform();
+                    }
+                    pilgrims.push(p);
+                }
+            }
+            updateCountersHUD();
+
+            requestAnimationFrame(gameLoop);
+        };
+    </script>
+</body>
+</html>
