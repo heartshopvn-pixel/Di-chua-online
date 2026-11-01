@@ -10,7 +10,16 @@ async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
 
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '100mb' }));
+  app.use(express.urlencoded({ limit: '100mb', extended: true }));
+
+  app.use((err: any, _req: Request, res: Response, next: express.NextFunction) => {
+    if (err && (err.type === 'entity.too.large' || err.status === 413)) {
+      res.status(413).json({ ok: false, error: 'Payload too large' });
+      return;
+    }
+    next(err);
+  });
 
   // Connected SSE clients (Admin Tabs + OBS Browser Source Windows)
   const clients = new Set<{ id: string; role: string; res: Response }>();

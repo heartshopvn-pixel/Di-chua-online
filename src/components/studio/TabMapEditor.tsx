@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Check,
   Copy,
@@ -38,7 +38,26 @@ interface TabMapEditorProps {
   onLoadBackupJson: (rawJsonText: string) => { ok: boolean; message: string };
 }
 
-export const TabMapEditor: React.FC<TabMapEditorProps> = ({
+function buildLightweightConfigForPreview(config: GameConfig): GameConfig {
+  return {
+    ...config,
+    bgmTracks: (config.bgmTracks || []).map((t) =>
+      t.url && t.url.startsWith('data:')
+        ? { ...t, url: '__KEEP_BROWSER_AUDIO_DATA__' }
+        : t
+    ),
+    bellMp3Url:
+      config.bellMp3Url && config.bellMp3Url.startsWith('data:')
+        ? '__KEEP_BROWSER_AUDIO_DATA__'
+        : config.bellMp3Url,
+    woodenFishMp3Url:
+      config.woodenFishMp3Url && config.woodenFishMp3Url.startsWith('data:')
+        ? '__KEEP_BROWSER_AUDIO_DATA__'
+        : config.woodenFishMp3Url,
+  };
+}
+
+export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
   config,
   vipSlots,
   normalSlots,
@@ -57,28 +76,44 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = ({
     null
   );
 
-  const exportJsonString = JSON.stringify(
-    {
-      config,
-      incenseBurner: config.incenseBurner,
-      offeringTrayPos: config.offeringTrayPos,
-      monkZone: config.monkZone,
-      redPrayZones: config.redPrayZones,
-      hudLayout: config.hudLayout,
-      grid: config.grid,
-      vipSlots: vipSlots.map((s) => ({ id: s.id, x: s.x, y: s.y, side: s.side })),
-      normalSlots: normalSlots.map((s) => ({
-        id: s.id,
-        x: s.x,
-        y: s.y,
-        side: s.side,
-        row: s.row,
-        col: s.col,
-      })),
-    },
-    null,
-    2
+  const vipSlotCoordsKey = useMemo(
+    () => vipSlots.map((s) => `${s.id}:${s.x},${s.y},${s.side}`).join('|'),
+    [vipSlots]
   );
+  const normalSlotCoordsKey = useMemo(
+    () =>
+      normalSlots
+        .map((s) => `${s.id}:${s.x},${s.y},${s.side},${s.row ?? ''},${s.col ?? ''}`)
+        .join('|'),
+    [normalSlots]
+  );
+
+  const exportJsonString = useMemo(() => {
+    const cleanConfig = buildLightweightConfigForPreview(config);
+    return JSON.stringify(
+      {
+        config: cleanConfig,
+        incenseBurner: config.incenseBurner,
+        offeringTrayPos: config.offeringTrayPos,
+        monkZone: config.monkZone,
+        redPrayZones: config.redPrayZones,
+        hudLayout: config.hudLayout,
+        grid: config.grid,
+        vipSlots: vipSlots.map((s) => ({ id: s.id, x: s.x, y: s.y, side: s.side })),
+        normalSlots: normalSlots.map((s) => ({
+          id: s.id,
+          x: s.x,
+          y: s.y,
+          side: s.side,
+          row: s.row,
+          col: s.col,
+        })),
+      },
+      null,
+      2
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config, vipSlotCoordsKey, normalSlotCoordsKey]);
 
   const handleCopyJson = () => {
     navigator.clipboard.writeText(exportJsonString);
@@ -958,7 +993,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = ({
       </section>
     </div>
   );
-};
+});
 
 interface StepperCardProps {
   label: string;

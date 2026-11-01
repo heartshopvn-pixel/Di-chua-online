@@ -134,7 +134,7 @@ class LiveSyncService {
     };
     this.recentPacketTimestamps.add(packet.ts);
 
-    // 1. Instant local same-browser BroadcastChannel
+    // 1. Instant local same-browser BroadcastChannel (supports full binary/base64 payloads)
     try {
       this.channel?.postMessage(packet);
     } catch {
@@ -143,10 +143,35 @@ class LiveSyncService {
 
     // 2. Cloud/Server Relay to OBS Browser Source or separate browser windows
     if (!this.isStaticHost()) {
+      let bodyStr = JSON.stringify({ senderId: this.clientId, packet });
+      // Prevent PayloadTooLargeError when syncing multi-megabyte base64 MP3 tracks over HTTP relay
+      if (bodyStr.length > 8 * 1024 * 1024) {
+        const stripHeavyDataUrls = (obj: any): any => {
+          if (typeof obj === 'string') {
+            return obj.startsWith('data:') && obj.length > 512 * 1024 ? null : obj;
+          }
+          if (Array.isArray(obj)) {
+            return obj.map(stripHeavyDataUrls);
+          }
+          if (obj && typeof obj === 'object') {
+            const out: Record<string, any> = {};
+            for (const [k, v] of Object.entries(obj)) {
+              out[k] = stripHeavyDataUrls(v);
+            }
+            return out;
+          }
+          return obj;
+        };
+        bodyStr = JSON.stringify({
+          senderId: this.clientId,
+          packet: stripHeavyDataUrls(packet),
+        });
+      }
+
       fetch('/api/sync-command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderId: this.clientId, packet }),
+        body: bodyStr,
       }).catch(() => {
         // Ignore if static host
       });

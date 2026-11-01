@@ -632,12 +632,10 @@ export function useTempleEngine() {
   useEffect(() => {
     configRef.current = config;
     soundEngine.syncConfig(config);
-    // Lưu đầy đủ cả file nhạc MP3 (DataURL) vào IndexedDB (không bị giới hạn 5MB như localStorage)
-    void idbSet(TEMPLE_CONFIG_STORAGE_KEY, config);
-    try {
-      localStorage.setItem(TEMPLE_CONFIG_STORAGE_KEY, JSON.stringify(config));
-    } catch {
-      // Nếu file MP3 đính kèm vượt quá 5MB của localStorage -> lưu bản rút gọn vào localStorage, còn bản đầy đủ đã nằm trong IndexedDB
+    const timer = setTimeout(() => {
+      // Lưu đầy đủ cả file nhạc MP3 (DataURL) vào IndexedDB (bất đồng bộ, không giới hạn 5MB)
+      void idbSet(TEMPLE_CONFIG_STORAGE_KEY, config);
+      // Luôn lưu bản gọn (không kèm chuỗi base64 MP3 nặng hàng chục MB) vào localStorage để không bao giờ gây đơ luồng chính
       try {
         const liteConfig: GameConfig = {
           ...config,
@@ -657,48 +655,65 @@ export function useTempleEngine() {
       } catch {
         // ignore quota error
       }
-    }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [config]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        TEMPLE_VIP_SLOTS_STORAGE_KEY,
-        JSON.stringify(vipSlots.map((s) => ({ id: s.id, x: s.x, y: s.y, side: s.side })))
-      );
-    } catch {
-      // ignore
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          TEMPLE_VIP_SLOTS_STORAGE_KEY,
+          JSON.stringify(vipSlots.map((s) => ({ id: s.id, x: s.x, y: s.y, side: s.side })))
+        );
+      } catch {
+        // ignore
+      }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [vipSlots]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(
-        TEMPLE_NORMAL_SLOTS_STORAGE_KEY,
-        JSON.stringify(
-          normalSlots.map((s) => ({
-            id: s.id,
-            x: s.x,
-            y: s.y,
-            side: s.side,
-            row: s.row,
-            col: s.col,
-          }))
-        )
-      );
-    } catch {
-      // ignore
-    }
+    const timer = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          TEMPLE_NORMAL_SLOTS_STORAGE_KEY,
+          JSON.stringify(
+            normalSlots.map((s) => ({
+              id: s.id,
+              x: s.x,
+              y: s.y,
+              side: s.side,
+              row: s.row,
+              col: s.col,
+            }))
+          )
+        );
+      } catch {
+        // ignore
+      }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [normalSlots]);
 
   useEffect(() => {
-    // Lưu đầy đủ toàn bộ ảnh nền, Sư Trụ Trì, Chú Tiểu Lớn/Nhỏ, Phật Tử vào IndexedDB để F5 không bao giờ bị mất
-    void idbSet(TEMPLE_CUSTOM_ASSETS_STORAGE_KEY, customAssets);
-    try {
-      localStorage.setItem(TEMPLE_CUSTOM_ASSETS_STORAGE_KEY, JSON.stringify(customAssets));
-    } catch {
-      // ignore localStorage 5MB quota error (IndexedDB already saved the full customAssets)
-    }
+    const timer = setTimeout(() => {
+      // Lưu đầy đủ toàn bộ ảnh nền, Sư Trụ Trì, Chú Tiểu Lớn/Nhỏ, Phật Tử vào IndexedDB để F5 không bao giờ bị mất
+      void idbSet(TEMPLE_CUSTOM_ASSETS_STORAGE_KEY, customAssets);
+      try {
+        const liteAssets: Partial<CustomAssetsConfig> = {};
+        (Object.keys(customAssets) as Array<keyof CustomAssetsConfig>).forEach((k) => {
+          const val = customAssets[k];
+          if (!val || !val.startsWith('data:') || val.length < 180000) {
+            liteAssets[k] = val;
+          }
+        });
+        localStorage.setItem(TEMPLE_CUSTOM_ASSETS_STORAGE_KEY, JSON.stringify(liteAssets));
+      } catch {
+        // ignore localStorage 5MB quota error (IndexedDB already saved the full customAssets)
+      }
+    }, 250);
+    return () => clearTimeout(timer);
   }, [customAssets]);
 
   useEffect(() => {
@@ -1850,6 +1865,7 @@ export function useTempleEngine() {
 
     let animId = 0;
     let lastTime = performance.now();
+    let lastReactCommitTime = 0;
     let autoSpawnTimer = 0;
     let npcPrayTimer = 0;
     let periodicBellTimer = 0;
@@ -1858,6 +1874,10 @@ export function useTempleEngine() {
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - lastTime) / 1000);
       lastTime = now;
+      const shouldCommitReactState = now - lastReactCommitTime >= 32;
+      if (shouldCommitReactState) {
+        lastReactCommitTime = now;
+      }
       const cfg = configRef.current;
       const mZone = cfg.monkZone;
       const activeControl = controlledTargetRef.current;
@@ -1999,7 +2019,9 @@ export function useTempleEngine() {
         return copy;
       });
       monksRef.current = nextMonks;
-      setMonks(nextMonks);
+      if (shouldCommitReactState) {
+        setMonks(nextMonks);
+      }
 
       // 2. Update Pilgrims (3-Lane Red Carpet + Offering Ceremony + VIP Row Check/Wait + Seated Bows + Manual AWSD)
       const allSlots = [...vipSlotsRef.current, ...normalSlotsRef.current];
@@ -2339,7 +2361,9 @@ export function useTempleEngine() {
       }
 
       pilgrimsRef.current = nextPilgrims;
-      setPilgrims(nextPilgrims);
+      if (shouldCommitReactState) {
+        setPilgrims(nextPilgrims);
+      }
 
       if (cfg.autoCrowd) {
         const currentActiveCount = pilgrimsRef.current.filter(
@@ -3241,8 +3265,27 @@ export function useTempleEngine() {
           return { ok: false, message: 'Nội dung JSON không hợp lệ.' };
         }
 
+        const rawIncomingCfg: Partial<GameConfig> = { ...(parsed.config || {}) };
+        if (Array.isArray(rawIncomingCfg.bgmTracks)) {
+          rawIncomingCfg.bgmTracks = rawIncomingCfg.bgmTracks.map((t) => {
+            if (t && t.url === '__KEEP_BROWSER_AUDIO_DATA__') {
+              const prevTrack = configRef.current.bgmTracks.find(
+                (pt) => pt.id === t.id
+              );
+              return { ...t, url: prevTrack?.url ?? null };
+            }
+            return t;
+          });
+        }
+        if (rawIncomingCfg.bellMp3Url === '__KEEP_BROWSER_AUDIO_DATA__') {
+          rawIncomingCfg.bellMp3Url = configRef.current.bellMp3Url;
+        }
+        if (rawIncomingCfg.woodenFishMp3Url === '__KEEP_BROWSER_AUDIO_DATA__') {
+          rawIncomingCfg.woodenFishMp3Url = configRef.current.woodenFishMp3Url;
+        }
+
         const baseConfigPatch: Partial<GameConfig> = {
-          ...(parsed.config || {}),
+          ...rawIncomingCfg,
           ...(parsed.incenseBurner ? { incenseBurner: parsed.incenseBurner } : {}),
           ...(parsed.offeringTrayPos ? { offeringTrayPos: parsed.offeringTrayPos } : {}),
           ...(parsed.monkZone ? { monkZone: parsed.monkZone } : {}),
@@ -3599,8 +3642,8 @@ export function useTempleEngine() {
     customWords,
     safetyLogs,
     setSafetyActionMode: handleChangeSafetyMode,
-    clearSafetyLogs: () => setSafetyLogs([]),
-    connectWs: (url: string) => syncService.connectWebSocket(url),
+    clearSafetyLogs: useCallback(() => setSafetyLogs([]), []),
+    connectWs: useCallback((url: string) => syncService.connectWebSocket(url), []),
     handleUpdateConfig,
     handleUpdateGrid,
     handleUpdateZoneBounds,
