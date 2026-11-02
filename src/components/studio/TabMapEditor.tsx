@@ -230,10 +230,10 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </span>
         </div>
 
-        <div className="grid grid-cols-3 gap-2.5">
-          {/* Số chỗ ngồi dọc (Số hàng) */}
+        <div className="grid grid-cols-2 gap-2.5">
+          {/* Số chỗ ngồi dọc (Số hàng ghế thường) */}
           <StepperCard
-            label="Số chỗ ngồi dọc (Hàng)"
+            label="Số hàng ghế thường (Dọc)"
             subLabel="Chèn khít nếu tăng dày"
             value={config.grid.rows}
             min={1}
@@ -249,13 +249,22 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             onChange={(val) => onUpdateGrid({ cols: val })}
           />
 
-          {/* Số ghế VIP */}
+          {/* Tổng số ghế VIP */}
           <StepperCard
-            label="Số ghế VIP"
-            subLabel="Hàng Thượng Điện"
+            label="Tổng số ghế VIP"
+            subLabel="Khu Thượng Điện"
             value={config.grid.vipCount}
             min={0}
             onChange={(val) => onUpdateGrid({ vipCount: val })}
+          />
+
+          {/* Số hàng ghế VIP */}
+          <StepperCard
+            label="Số hàng ghế VIP"
+            subLabel="Chia đều số ghế VIP theo hàng"
+            value={config.grid.vipRows ?? 1}
+            min={1}
+            onChange={(val) => onUpdateGrid({ vipRows: val })}
           />
         </div>
 
@@ -391,25 +400,55 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
         </div>
 
-        <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
-          <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-            <span>
-              Thời gian ngồi tọa tới khi rời đi (Người thật & NPC, tối thiểu 3s)
-            </span>
-            <span className="text-amber-300 font-mono tabular-nums font-bold">
-              {config.prayDurationSec} giây
-            </span>
+        {/* Thời gian ngồi trên Ghế VIP & Ghế Thường riêng biệt */}
+        <div className="grid grid-cols-2 gap-2.5">
+          <div className="p-2.5 rounded-lg bg-stone-900/60 border border-amber-500/35">
+            <div className="flex justify-between text-[11px] text-amber-200 mb-1">
+              <span className="font-bold">👑 Thời gian ngồi Ghế VIP</span>
+              <span className="text-amber-300 font-mono tabular-nums font-bold">
+                {config.vipPrayDurationSec ?? config.prayDurationSec ?? 35}s
+              </span>
+            </div>
+            <input
+              type="range"
+              min={3}
+              max={180}
+              value={Math.min(
+                180,
+                Math.max(3, config.vipPrayDurationSec ?? config.prayDurationSec ?? 35)
+              )}
+              onChange={(e) =>
+                onUpdateConfig({
+                  vipPrayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
+                })
+              }
+              className="w-full accent-amber-400 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+            />
           </div>
-          <input
-            type="range"
-            min={3}
-            max={180}
-            value={Math.min(180, Math.max(3, config.prayDurationSec))}
-            onChange={(e) =>
-              onUpdateConfig({ prayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3) })
-            }
-            className="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-          />
+
+          <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
+            <div className="flex justify-between text-[11px] text-stone-300 mb-1">
+              <span className="font-bold text-emerald-300">🧘 Thời gian ngồi Ghế Thường</span>
+              <span className="text-emerald-300 font-mono tabular-nums font-bold">
+                {config.normalPrayDurationSec ?? config.prayDurationSec ?? 22}s
+              </span>
+            </div>
+            <input
+              type="range"
+              min={3}
+              max={180}
+              value={Math.min(
+                180,
+                Math.max(3, config.normalPrayDurationSec ?? config.prayDurationSec ?? 22)
+              )}
+              onChange={(e) =>
+                onUpdateConfig({
+                  normalPrayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
+                })
+              }
+              className="w-full accent-emerald-400 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+            />
+          </div>
         </div>
       </section>
 

@@ -54,8 +54,8 @@ export function getPilgrimFrameIndex(p: PilgrimData): PilgrimFrameIndex {
       if (Math.abs((p.laneX || 270) - p.x) > 4) {
         return stepToggle ? 8 : 9;
       }
-      // Khi dâng lễ (isVip / coins > 0): đổi thành animation dâng lễ (Frame 7) dẫn người chơi đi đến trước lư hương
-      if (p.isVip || p.coins > 0) {
+      // Khi đang đội lễ vật đi dâng lễ: đổi thành animation dâng lễ (Frame 7) dẫn người chơi đi đến trước lư hương
+      if (p.isCarryingGift) {
         return 7;
       }
       return stepToggle ? 2 : 3;
@@ -76,12 +76,13 @@ export function getPilgrimFrameIndex(p: PilgrimData): PilgrimFrameIndex {
       // Đứng tại hàng ghế VIP chờ có slot VIP trống
       return 4;
 
+    case 'walk_carpet_to_slot_y':
+    case 'walk_vert_to_slot':
+      return p.slotY > p.y ? (stepToggle ? 0 : 1) : stepToggle ? 2 : 3;
+
     case 'walk_side_to_slot':
     case 'leave_side_to_aisle':
       return stepToggle ? 8 : 9;
-
-    case 'walk_vert_to_slot':
-      return p.slotY > p.y ? (stepToggle ? 0 : 1) : stepToggle ? 2 : 3;
 
     case 'pray_seated': {
       // Bắt đầu là bái vài cái (Frame 6 xen kẽ Frame 5) xong ngồi yên (Frame 5)
@@ -228,12 +229,10 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
     const isLeaving =
       state === 'leave_side_to_aisle' || state === 'leave_down_exit';
     const isVipStyled = isVip || coins > 0;
+    const isCarryingGiftNow = Boolean(pilgrim.isCarryingGift);
     const isOfferingAction =
-      (state === 'walk_in_up' && isVipStyled) ||
-      state === 'throw_offering_at_burner' ||
-      (state === 'ceremony_at_burner' && isVipStyled) ||
-      state === 'walk_to_vip_check' ||
-      state === 'wait_for_vip_slot';
+      (state === 'walk_in_up' && isCarryingGiftNow) ||
+      state === 'throw_offering_at_burner';
 
     const displayPrayer = (prayer || '').trim();
 
@@ -255,7 +254,7 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
     const hasCombo = Boolean(comboCount && comboCount > 1 && !isLeaving);
 
     // Hiển thị model lễ vật trên 2 tay khi đang đi dâng lễ lên lư hương
-    const showOfferingOnHands = state === 'walk_in_up' && isVipStyled;
+    const showOfferingOnHands = state === 'walk_in_up' && isCarryingGiftNow;
 
     // Hiệu ứng ném model lễ vật từ tay vào lư hương rồi tan biến
     const isThrowingOffering = state === 'throw_offering_at_burner';

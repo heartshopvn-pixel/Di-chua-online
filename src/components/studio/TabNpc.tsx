@@ -15,6 +15,7 @@ import {
   Shuffle,
   Volume2,
   ImagePlus,
+  Upload,
 } from 'lucide-react';
 import {
   ControlledTargetId,
@@ -168,6 +169,28 @@ export const TabNpc: React.FC<TabNpcProps> = ({
       onUpdateNpcPrayers(next);
     }
     setEditingPrayerIdx(null);
+  };
+
+  const handleUploadTxtList = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    onApply: (lines: string[]) => void
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        const lines = reader.result
+          .split(/\r?\n/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+        if (lines.length > 0) {
+          onApply(Array.from(new Set(lines)));
+        }
+      }
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
   };
 
   return (
@@ -433,24 +456,39 @@ export const TabNpc: React.FC<TabNpcProps> = ({
         </label>
       </div>
 
-      {/* 3. DANH SÁCH LỜI CẦU NGUYỆN CỦA NPC */}
+      {/* 3. DANH SÁCH LỜI CẦU NGUYỆN / COMMENT CỦA NPC */}
       <div className="bg-[#1b120e] border border-amber-500/20 rounded-lg p-3.5 space-y-2.5">
-        <div className="flex items-center justify-between border-b border-amber-500/10 pb-2">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">
-              Danh Sách Lời Cầu Nguyện NPC ({npcPrayers.length})
+        <div className="flex items-center justify-between gap-2 border-b border-amber-500/10 pb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <MessageSquare className="w-4 h-4 text-amber-400 shrink-0" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300 truncate">
+              Danh Sách Comment / Cầu Nguyện NPC ({npcPrayers.length})
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={onResetNpcPrayers}
-            className="text-[10px] text-amber-300/70 hover:text-amber-200 flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/50 border border-amber-500/20"
-            title="Khôi phục danh sách lời cầu nguyện mặc định"
-          >
-            <RotateCcw className="w-3 h-3" />
-            Mặc định
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <label
+              className="text-[10px] font-bold text-emerald-200 hover:text-emerald-100 flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 cursor-pointer transition"
+              title="Tải file .txt (mỗi dòng 1 câu comment/cầu nguyện) để cập nhật danh sách"
+            >
+              <Upload className="w-3 h-3 text-emerald-400" />
+              <span>Cập nhật bằng file .txt</span>
+              <input
+                type="file"
+                accept=".txt,text/plain"
+                className="hidden"
+                onChange={(e) => handleUploadTxtList(e, onUpdateNpcPrayers)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onResetNpcPrayers}
+              className="text-[10px] text-amber-300/70 hover:text-amber-200 flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/50 border border-amber-500/20 cursor-pointer"
+              title="Khôi phục danh sách lời cầu nguyện mặc định"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Mặc định
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleAddPrayer} className="flex gap-1.5">
@@ -533,22 +571,37 @@ export const TabNpc: React.FC<TabNpcProps> = ({
 
       {/* 4. DANH SÁCH TÊN NPC */}
       <div className="bg-[#1b120e] border border-amber-500/20 rounded-lg p-3.5 space-y-2.5">
-        <div className="flex items-center justify-between border-b border-amber-500/10 pb-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-amber-400" />
-            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300">
+        <div className="flex items-center justify-between gap-2 border-b border-amber-500/10 pb-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+            <h3 className="text-xs font-bold uppercase tracking-wider text-amber-300 truncate">
               Danh Sách Tên NPC ({npcNames.length})
             </h3>
           </div>
-          <button
-            type="button"
-            onClick={onResetNpcNames}
-            className="text-[10px] text-amber-300/70 hover:text-amber-200 flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/50 border border-amber-500/20"
-            title="Khôi phục danh sách tên mặc định"
-          >
-            <RotateCcw className="w-3 h-3" />
-            Mặc định
-          </button>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <label
+              className="text-[10px] font-bold text-emerald-200 hover:text-emerald-100 flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/70 hover:bg-emerald-900/80 border border-emerald-500/40 cursor-pointer transition"
+              title="Tải file .txt (mỗi dòng 1 tên NPC) để cập nhật danh sách tên"
+            >
+              <Upload className="w-3 h-3 text-emerald-400" />
+              <span>Cập nhật bằng file .txt</span>
+              <input
+                type="file"
+                accept=".txt,text/plain"
+                className="hidden"
+                onChange={(e) => handleUploadTxtList(e, onUpdateNpcNames)}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={onResetNpcNames}
+              className="text-[10px] text-amber-300/70 hover:text-amber-200 flex items-center gap-1 px-2 py-0.5 rounded bg-amber-950/50 border border-amber-500/20 cursor-pointer"
+              title="Khôi phục danh sách tên mặc định"
+            >
+              <RotateCcw className="w-3 h-3" />
+              Mặc định
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleAddName} className="flex gap-1.5">

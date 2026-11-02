@@ -254,6 +254,7 @@ export const GameStage: React.FC<GameStageProps> = ({
 }) => {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const worldCameraRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rainCanvasRef = useRef<HTMLCanvasElement>(null);
   const [scale, setScale] = useState(1);
@@ -325,13 +326,17 @@ export const GameStage: React.FC<GameStageProps> = ({
     };
   }, []);
 
-  // Keep latest props in ref for 60fps Canvas FX loop
+  // Keep latest props in ref for 60fps Canvas FX & Smooth Camera loop
   const fxStateRef = useRef({
     incenseBurner: config.incenseBurner,
     showWaypoints: config.showWaypoints,
     vipSlots,
     normalSlots,
     goldenLotusRainUntil,
+    cameraFocus,
+    pilgrims,
+    cameraZoomScale: config.cameraZoomScale ?? 2.25,
+    cameraSmoothSpeed: config.cameraSmoothSpeed ?? 4.5,
   });
   useEffect(() => {
     fxStateRef.current = {
@@ -340,8 +345,24 @@ export const GameStage: React.FC<GameStageProps> = ({
       vipSlots,
       normalSlots,
       goldenLotusRainUntil,
+      cameraFocus,
+      pilgrims,
+      cameraZoomScale: config.cameraZoomScale ?? 2.25,
+      cameraSmoothSpeed: config.cameraSmoothSpeed ?? 4.5,
     };
-  }, [config.incenseBurner, config.showWaypoints, vipSlots, normalSlots, goldenLotusRainUntil]);
+  }, [
+    config.incenseBurner,
+    config.showWaypoints,
+    config.cameraZoomScale,
+    config.cameraSmoothSpeed,
+    vipSlots,
+    normalSlots,
+    goldenLotusRainUntil,
+    cameraFocus,
+    pilgrims,
+  ]);
+
+  const camRigRef = useRef({ x: 270, y: 480, zoom: 1 });
 
   // Canvas 2D Smoke, Optional Position Circles & 3-Second Full-Screen Golden Lotus Rain Loop
   useEffect(() => {
@@ -397,6 +418,54 @@ export const GameStage: React.FC<GameStageProps> = ({
       const dt = Math.min(0.1, (now - lastTime) / 1000);
       lastTime = now;
       const timeSec = now / 1000;
+
+      // 60fps Smooth Pan & Zoom Camera Interpolation (Không bị cut màn hình)
+      const st = fxStateRef.current;
+      const isFocusValid =
+        Boolean(st.cameraFocus.pilgrimId) && Date.now() < st.cameraFocus.until;
+      const targetPilgrim = isFocusValid
+        ? st.pilgrims.find((p) => p.id === st.cameraFocus.pilgrimId)
+        : undefined;
+
+      let desiredZoom = 1;
+      let desiredX = 270;
+      let desiredY = 480;
+
+      if (targetPilgrim) {
+        desiredZoom = Math.max(1.2, Math.min(3.4, st.cameraZoomScale || 2.25));
+        const minX = 270 / desiredZoom;
+        const maxX = 540 - 270 / desiredZoom;
+        const minY = 480 / desiredZoom;
+        const maxY = 960 - 480 / desiredZoom;
+        desiredX = Math.max(minX, Math.min(maxX, targetPilgrim.x));
+        desiredY = Math.max(minY, Math.min(maxY, targetPilgrim.y - 44));
+      }
+
+      const rig = camRigRef.current;
+      const smoothSpeed = Math.max(1.2, Math.min(14, st.cameraSmoothSpeed || 4.5));
+      const lerpAlpha = 1 - Math.exp(-smoothSpeed * dt);
+
+      rig.x += (desiredX - rig.x) * lerpAlpha;
+      rig.y += (desiredY - rig.y) * lerpAlpha;
+      rig.zoom += (desiredZoom - rig.zoom) * lerpAlpha;
+
+      if (
+        desiredZoom === 1 &&
+        Math.abs(rig.zoom - 1) < 0.001 &&
+        Math.hypot(rig.x - 270, rig.y - 480) < 0.25
+      ) {
+        rig.zoom = 1;
+        rig.x = 270;
+        rig.y = 480;
+      }
+
+      if (worldCameraRef.current) {
+        const tx = 270 - rig.x;
+        const ty = 480 - rig.y;
+        worldCameraRef.current.style.transform = `scale(${rig.zoom.toFixed(
+          4
+        )}) translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px)`;
+      }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -852,18 +921,11 @@ export const GameStage: React.FC<GameStageProps> = ({
     (p) => p.state !== 'leave_side_to_aisle' && p.state !== 'leave_down_exit'
   ).length;
 
-  // Khóa camera zoom gần sát bên nhân vật trong 4s và đặt nhân vật ngay trọng tâm khung hình (270, 480)
   const isCameraZoomActive =
     Boolean(cameraFocus.pilgrimId) && Date.now() < cameraFocus.until;
   const focusedPilgrim = isCameraZoomActive
     ? pilgrims.find((p) => p.id === cameraFocus.pilgrimId)
     : undefined;
-
-  const zoomScale = 2.45;
-  const focusCenterX = focusedPilgrim ? focusedPilgrim.x : 270;
-  const focusCenterY = focusedPilgrim ? focusedPilgrim.y - 44 : 480;
-  const camTranslateX = focusedPilgrim ? 270 - focusCenterX : 0;
-  const camTranslateY = focusedPilgrim ? 480 - focusCenterY : 0;
 
   return (
     <div
@@ -875,14 +937,13 @@ export const GameStage: React.FC<GameStageProps> = ({
         className="temple-stage-bg w-[540px] h-[960px] aspect-[9/16] relative overflow-hidden shrink-0 origin-center"
         style={{ transform: `scale(${scale})` }}
       >
-        {/* World Camera Container (Zoom gần sát bên nhân vật 2.45x và đặt nhân vật đúng trọng tâm khung hình trong 4s) */}
+        {/* World Camera Container (60fps Smooth Interpolated Pan & Zoom Rig) */}
         <div
-          className="absolute inset-0 transition-transform duration-300 ease-out"
+          ref={worldCameraRef}
+          className="absolute inset-0 will-change-transform"
           style={{
             transformOrigin: '270px 480px',
-            transform: focusedPilgrim
-              ? `scale(${zoomScale}) translate(${camTranslateX.toFixed(1)}px, ${camTranslateY.toFixed(1)}px)`
-              : 'scale(1) translate(0px, 0px)',
+            transform: 'scale(1) translate(0px, 0px)',
           }}
         >
           {/* Layer 1: Temple Artwork */}
@@ -985,11 +1046,18 @@ export const GameStage: React.FC<GameStageProps> = ({
           </div>
         </div>
 
-        {/* Hiệu ứng khung viền Hào Quang Hoàng Kim khi đang khóa Camera Zoom 3s cho quà Đặc Biệt (>10 coin) */}
-        {focusedPilgrim && (
+        {/* Hiệu ứng khung viền khi đang khóa Camera Zoom vào mục tiêu */}
+        {focusedPilgrim && cameraFocus.reason === 'special_gift' && (
           <div className="absolute inset-0 pointer-events-none z-28 border-4 border-yellow-300/80 shadow-[inset_0_0_45px_rgba(250,204,21,0.55)] animate-pulse">
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-amber-950/90 border border-yellow-300 text-[11px] font-extrabold text-yellow-200 shadow-lg whitespace-nowrap">
               ✨ Đại Lễ Hào Quang: {focusedPilgrim.username} ✨
+            </div>
+          </div>
+        )}
+        {focusedPilgrim && cameraFocus.reason === 'gift' && (
+          <div className="absolute inset-0 pointer-events-none z-28 border-2 border-amber-400/60 shadow-[inset_0_0_25px_rgba(245,158,11,0.3)]">
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-stone-950/90 border border-amber-400/70 text-[11px] font-bold text-amber-200 shadow-lg whitespace-nowrap">
+              🎁 Thí chủ dâng lễ: {focusedPilgrim.username}
             </div>
           </div>
         )}

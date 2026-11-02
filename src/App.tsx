@@ -162,6 +162,13 @@ export default function App() {
           onClearDonors={engine.handleClearDonors}
           eventTtsQueue={engine.eventTtsQueue}
           onClearEventTtsQueue={engine.handleClearEventTtsQueue}
+          cameraFocus={engine.cameraFocus}
+          cameraQueue={engine.cameraQueue}
+          onSkipCameraTarget={engine.handleSkipCameraTarget}
+          onResetCameraView={engine.handleResetCameraView}
+          onClearCameraQueue={engine.handleClearCameraQueue}
+          onRemoveCameraQueueItem={engine.handleRemoveCameraQueueItem}
+          onFocusPilgrimNow={engine.handleFocusPilgrimNow}
         />
       )}
     </div>

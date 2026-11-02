@@ -15,6 +15,7 @@ export interface GridConfig {
   rows: number;
   cols: number;
   vipCount: number;
+  vipRows?: number;
   yTop: number;
   yBottom: number;
   topWidth: number;
@@ -159,6 +160,19 @@ export interface GameConfig {
   npcSpawnIntervalSec: number;
   npcPrayIntervalSec: number;
   prayDurationSec: number;
+  vipPrayDurationSec: number;
+  normalPrayDurationSec: number;
+
+  // Cấu hình Camera thông minh (Theo dõi comment, Chế độ đẩy lễ vật & Zoom mượt)
+  cameraFollowCommentEnabled: boolean;
+  cameraFollowRealUser: boolean;
+  cameraFollowNpc: boolean;
+  cameraHoldDurationSec: number;
+  cameraPushOnGiftEnabled: boolean;
+  cameraSpecialGiftLockSec: number;
+  cameraZoomScale: number;
+  cameraSmoothSpeed: number;
+
   characterScale: number;
   nameTagFontFamily: string;
   nameTagScale: number;
@@ -211,6 +225,7 @@ export type PilgrimState =
   | 'ceremony_at_burner'
   | 'walk_to_vip_check'
   | 'wait_for_vip_slot'
+  | 'walk_carpet_to_slot_y'
   | 'walk_side_to_slot'
   | 'walk_vert_to_slot'
   | 'pray_seated'
@@ -259,6 +274,8 @@ export interface PilgrimData {
   avatarUrl?: string | null;
   hairSeed: number;
   hasGoldenAura?: boolean;
+  isCarryingGift?: boolean;
+  hasComment?: boolean;
   comboCount?: number;
   giftName?: string;
   comboPopKey?: number;
@@ -285,9 +302,27 @@ export interface FlyingLotusFX {
   createdAt: number;
 }
 
+export type CameraFocusReason = 'comment' | 'gift' | 'special_gift' | 'manual';
+
+export interface CameraQueueItem {
+  id: string;
+  pilgrimId: number;
+  username: string;
+  reason: CameraFocusReason;
+  isBot: boolean;
+  holdSec: number;
+  lockSec: number;
+  addedAt: number;
+}
+
 export interface CameraFocusState {
   pilgrimId: number | null;
+  username?: string;
+  reason?: CameraFocusReason;
+  isBot?: boolean;
+  startedAt?: number;
   until: number;
+  lockedUntil?: number;
 }
 
 /**
@@ -366,7 +401,14 @@ export interface DonorEntry {
   coins: number;
 }
 
-export type DevTabId = 'control' | 'audio' | 'npc' | 'safety' | 'map' | 'tiktok';
+export type DevTabId =
+  | 'control'
+  | 'camera'
+  | 'audio'
+  | 'npc'
+  | 'safety'
+  | 'map'
+  | 'tiktok';
 
 export interface StudioBackupData {
   version?: number;
@@ -413,6 +455,8 @@ export interface SyncPacket {
     | 'UPDATE_SAFETY'
     | 'UPDATE_HUD_LAYOUT'
     | 'UPDATE_ZONES'
+    | 'UPDATE_NPC_LISTS'
+    | 'CAMERA_CMD'
     | 'TRIGGER_LIKE'
     | 'TRIGGER_FOLLOW'
     | 'TRIGGER_GRAND_EVENT'

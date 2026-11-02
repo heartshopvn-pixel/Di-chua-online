@@ -909,67 +909,137 @@ export const TabControl: React.FC<TabControlProps> = ({
             </div>
           </div>
 
-          {/* Điều chỉnh thời gian ngồi tọa tới khi rời đi (Áp dụng cho cả Người thật & NPC) */}
-          <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-500/35 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="text-[11px] font-bold text-amber-200">
-                  ⏱️ Thời gian ngồi tọa tới khi rời đi (Người thật & NPC)
-                </div>
-                <div className="text-[10px] text-stone-400">
-                  Tính từ lúc bắt đầu bái lạy & ngồi thiền trên chiếu cho tới khi đứng dậy ra về
-                </div>
+          {/* Điều chỉnh thời gian ngồi trên Ghế VIP / Ghế Thường riêng biệt */}
+          <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-500/35 space-y-3">
+            <div>
+              <div className="text-[11px] font-bold text-amber-200">
+                ⏱️ Thời gian ngồi trên Ghế VIP / Ghế Thường (Riêng biệt)
               </div>
-              <div className="flex items-center gap-1 shrink-0">
-                <input
-                  type="number"
-                  min={3}
-                  max={300}
-                  value={config.prayDurationSec}
-                  onChange={(e) =>
-                    onUpdateConfig({
-                      prayDurationSec: Math.max(
-                        3,
-                        Math.min(300, parseInt(e.target.value, 10) || 3)
-                      ),
-                    })
-                  }
-                  className="w-14 px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-xs font-mono font-bold text-amber-300 text-right"
-                />
-                <span className="text-[11px] font-mono text-amber-300">giây</span>
+              <div className="text-[10px] text-stone-400">
+                Tính từ lúc bái lạy & ngồi thiền trên ghế VIP hoặc chiếu thường cho tới khi đứng dậy ra về
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 shrink-0">
-                {[10, 20, 30, 60, 120].map((sec) => (
-                  <button
-                    key={sec}
-                    type="button"
-                    onClick={() => onUpdateConfig({ prayDurationSec: sec })}
-                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
-                      config.prayDurationSec === sec
-                        ? 'bg-amber-400 text-stone-950 font-bold'
-                        : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
-                    }`}
-                  >
-                    {sec}s
-                  </button>
-                ))}
+            {/* 1. Thời gian ngồi Ghế VIP */}
+            <div className="p-2 rounded-lg bg-amber-950/25 border border-amber-500/30 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-amber-300">
+                  👑 Thời gian ngồi Ghế VIP
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <input
+                    type="number"
+                    min={3}
+                    max={600}
+                    value={config.vipPrayDurationSec ?? config.prayDurationSec ?? 35}
+                    onChange={(e) =>
+                      onUpdateConfig({
+                        vipPrayDurationSec: Math.max(
+                          3,
+                          Math.min(600, parseInt(e.target.value, 10) || 3)
+                        ),
+                      })
+                    }
+                    className="w-14 px-1.5 py-0.5 rounded bg-stone-900 border border-amber-500/40 text-xs font-mono font-bold text-amber-300 text-right"
+                  />
+                  <span className="text-[11px] font-mono text-amber-300">giây</span>
+                </div>
               </div>
-              <input
-                type="range"
-                min={3}
-                max={180}
-                step={1}
-                value={Math.min(180, Math.max(3, config.prayDurationSec))}
-                onChange={(e) =>
-                  onUpdateConfig({
-                    prayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
-                  })
-                }
-                className="flex-1 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-              />
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 shrink-0">
+                  {[15, 30, 45, 60, 120].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => onUpdateConfig({ vipPrayDurationSec: sec })}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                        (config.vipPrayDurationSec ?? config.prayDurationSec ?? 35) === sec
+                          ? 'bg-amber-400 text-stone-950 font-bold'
+                          : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                      }`}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="range"
+                  min={3}
+                  max={180}
+                  step={1}
+                  value={Math.min(
+                    180,
+                    Math.max(3, config.vipPrayDurationSec ?? config.prayDurationSec ?? 35)
+                  )}
+                  onChange={(e) =>
+                    onUpdateConfig({
+                      vipPrayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
+                    })
+                  }
+                  className="flex-1 accent-amber-400 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                />
+              </div>
+            </div>
+
+            {/* 2. Thời gian ngồi Ghế Thường */}
+            <div className="p-2 rounded-lg bg-stone-900/80 border border-stone-800 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold text-emerald-300">
+                  🧘 Thời gian ngồi Ghế Thường
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  <input
+                    type="number"
+                    min={3}
+                    max={600}
+                    value={config.normalPrayDurationSec ?? config.prayDurationSec ?? 22}
+                    onChange={(e) =>
+                      onUpdateConfig({
+                        normalPrayDurationSec: Math.max(
+                          3,
+                          Math.min(600, parseInt(e.target.value, 10) || 3)
+                        ),
+                      })
+                    }
+                    className="w-14 px-1.5 py-0.5 rounded bg-stone-900 border border-stone-700 text-xs font-mono font-bold text-emerald-300 text-right"
+                  />
+                  <span className="text-[11px] font-mono text-emerald-300">giây</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 shrink-0">
+                  {[10, 20, 30, 60, 120].map((sec) => (
+                    <button
+                      key={sec}
+                      type="button"
+                      onClick={() => onUpdateConfig({ normalPrayDurationSec: sec })}
+                      className={`px-1.5 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                        (config.normalPrayDurationSec ?? config.prayDurationSec ?? 22) === sec
+                          ? 'bg-emerald-400 text-stone-950 font-bold'
+                          : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                      }`}
+                    >
+                      {sec}s
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="range"
+                  min={3}
+                  max={180}
+                  step={1}
+                  value={Math.min(
+                    180,
+                    Math.max(3, config.normalPrayDurationSec ?? config.prayDurationSec ?? 22)
+                  )}
+                  onChange={(e) =>
+                    onUpdateConfig({
+                      normalPrayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
+                    })
+                  }
+                  className="flex-1 accent-emerald-400 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                />
+              </div>
             </div>
           </div>
         </div>

@@ -38,6 +38,13 @@ class LiveSyncService {
       };
     }
     this.initServerRelay();
+    if (typeof window !== 'undefined') {
+      setTimeout(() => {
+        if (this.status === 'simulated' && !this.ws) {
+          this.connectWebSocket('ws://localhost:8080');
+        }
+      }, 500);
+    }
   }
 
   private isStaticHost(): boolean {

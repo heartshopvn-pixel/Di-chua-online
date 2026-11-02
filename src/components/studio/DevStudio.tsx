@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Camera,
   Check,
   Copy,
   Crosshair,
@@ -18,6 +19,8 @@ import {
   VolumeX,
 } from 'lucide-react';
 import {
+  CameraFocusState,
+  CameraQueueItem,
   ControlledTargetId,
   CustomAssetsConfig,
   DevTabId,
@@ -38,6 +41,7 @@ import { TabNpc } from './TabNpc';
 import { TabSafety } from './TabSafety';
 import { TabMapEditor } from './TabMapEditor';
 import { TabTikTokNode } from './TabTikTokNode';
+import { TabCamera } from './TabCamera';
 
 interface DevStudioProps {
   activeTab: DevTabId;
@@ -124,6 +128,13 @@ interface DevStudioProps {
     queueItems: string[];
   };
   onClearEventTtsQueue: () => void;
+  cameraFocus: CameraFocusState;
+  cameraQueue: CameraQueueItem[];
+  onSkipCameraTarget: () => void;
+  onResetCameraView: () => void;
+  onClearCameraQueue: () => void;
+  onRemoveCameraQueueItem: (queueId: string) => void;
+  onFocusPilgrimNow: (pilgrimId: number) => void;
 }
 
 export const DevStudio: React.FC<DevStudioProps> = ({
@@ -195,6 +206,13 @@ export const DevStudio: React.FC<DevStudioProps> = ({
   onClearDonors,
   eventTtsQueue,
   onClearEventTtsQueue,
+  cameraFocus,
+  cameraQueue,
+  onSkipCameraTarget,
+  onResetCameraView,
+  onClearCameraQueue,
+  onRemoveCameraQueueItem,
+  onFocusPilgrimNow,
 }) => {
   const [copiedObsLink, setCopiedObsLink] = useState(false);
   const [backupNotice, setBackupNotice] = useState<{
@@ -418,13 +436,13 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         )}
       </div>
 
-      {/* Clean Segmented Navigation Tabs (6 Tabs) */}
+      {/* Clean Segmented Navigation Tabs (7 Tabs) */}
       <div className="px-3 pt-3 pb-2 border-b border-stone-800 bg-stone-950">
-        <div className="grid grid-cols-6 gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800/80">
+        <div className="grid grid-cols-7 gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800/80">
           <button
             type="button"
             onClick={() => onSelectTab('control')}
-            className={`py-1.5 px-1 rounded-md text-[10.5px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'control'
                 ? 'bg-stone-800 text-amber-300 shadow-xs'
                 : 'text-stone-400 hover:text-stone-200'
@@ -436,8 +454,23 @@ export const DevStudio: React.FC<DevStudioProps> = ({
 
           <button
             type="button"
+            onClick={() => onSelectTab('camera')}
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+              activeTab === 'camera'
+                ? 'bg-stone-800 text-amber-300 shadow-xs'
+                : 'text-stone-400 hover:text-stone-200'
+            }`}
+          >
+            <Camera className="w-3 h-3" />
+            <span>
+              Camera{cameraQueue.length > 0 ? ` (${cameraQueue.length})` : ''}
+            </span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => onSelectTab('audio')}
-            className={`py-1.5 px-1 rounded-md text-[10.5px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'audio'
                 ? 'bg-stone-800 text-amber-300 shadow-xs'
                 : 'text-stone-400 hover:text-stone-200'
@@ -450,7 +483,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           <button
             type="button"
             onClick={() => onSelectTab('npc')}
-            className={`py-1.5 px-1 rounded-md text-[10.5px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'npc'
                 ? 'bg-stone-800 text-cyan-300 shadow-xs'
                 : 'text-stone-400 hover:text-stone-200'
@@ -463,7 +496,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           <button
             type="button"
             onClick={() => onSelectTab('safety')}
-            className={`py-1.5 px-1 rounded-md text-[10.5px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'safety'
                 ? 'bg-stone-800 text-amber-300 shadow-xs'
                 : 'text-stone-400 hover:text-stone-200'
@@ -476,7 +509,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           <button
             type="button"
             onClick={() => onSelectTab('map')}
-            className={`py-1.5 px-1 rounded-md text-[10.5px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'map'
                 ? 'bg-stone-800 text-amber-300 shadow-xs'
                 : 'text-stone-400 hover:text-stone-200'
@@ -489,7 +522,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           <button
             type="button"
             onClick={() => onSelectTab('tiktok')}
-            className={`py-1.5 px-1 rounded-md text-[10.5px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
+            className={`py-1.5 px-1 rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
               activeTab === 'tiktok'
                 ? 'bg-stone-800 text-amber-300 shadow-xs'
                 : 'text-stone-400 hover:text-stone-200'
@@ -594,6 +627,21 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             onResetAsset={onResetAsset}
             onSaveBackupJson={onSaveBackupJson}
             onLoadBackupJson={onLoadBackupJson}
+          />
+        )}
+
+        {activeTab === 'camera' && (
+          <TabCamera
+            config={config}
+            cameraFocus={cameraFocus}
+            cameraQueue={cameraQueue}
+            pilgrims={pilgrims}
+            onUpdateConfig={onUpdateConfig}
+            onSkipCameraTarget={onSkipCameraTarget}
+            onResetCameraView={onResetCameraView}
+            onClearCameraQueue={onClearCameraQueue}
+            onRemoveCameraQueueItem={onRemoveCameraQueueItem}
+            onFocusPilgrimNow={onFocusPilgrimNow}
           />
         )}
 

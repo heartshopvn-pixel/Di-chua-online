@@ -207,6 +207,19 @@ export const DEFAULT_CONFIG: GameConfig = {
   npcSpawnIntervalSec: 2.5,
   npcPrayIntervalSec: 6.0,
   prayDurationSec: 22,
+  vipPrayDurationSec: 35,
+  normalPrayDurationSec: 22,
+
+  // Cấu hình Camera thông minh
+  cameraFollowCommentEnabled: true,
+  cameraFollowRealUser: true,
+  cameraFollowNpc: false,
+  cameraHoldDurationSec: 5,
+  cameraPushOnGiftEnabled: true,
+  cameraSpecialGiftLockSec: 3,
+  cameraZoomScale: 2.25,
+  cameraSmoothSpeed: 4.5,
+
   characterScale: 1.0,
   nameTagFontFamily: 'Inter, system-ui, sans-serif',
   nameTagScale: 1.0,
@@ -228,6 +241,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     rows: 6,
     cols: 8,
     vipCount: 8,
+    vipRows: 1,
     yTop: 655,
     yBottom: 905,
     topWidth: 440,
