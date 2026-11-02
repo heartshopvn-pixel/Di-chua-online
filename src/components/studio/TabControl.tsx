@@ -7,15 +7,18 @@ import {
   EyeOff,
   Heart,
   ImagePlus,
+  Plus,
   RotateCcw,
   Send,
   Sparkles,
+  Trash2,
   Upload,
   UserCheck,
   UserPlus,
   Users,
 } from 'lucide-react';
-import { GameConfig, HudLayoutConfig } from '../../types/game';
+import { GameConfig, GuideTaskItem, HudLayoutConfig } from '../../types/game';
+import { DEFAULT_GUIDE_ITEMS } from '../../config/constants';
 
 interface TabControlProps {
   config: GameConfig;
@@ -687,6 +690,216 @@ export const TabControl: React.FC<TabControlProps> = ({
             placeholder="Nhập nội dung thông báo hiển thị trên sân..."
             className="w-full px-2 py-1.5 rounded bg-stone-900 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500 resize-y"
           />
+        </div>
+
+        {/* Độ mờ nền riêng biệt cho từng loại bảng (0% mất nền -> 100%) */}
+        <div className="p-2.5 rounded-lg bg-stone-950/90 border border-amber-500/35 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-bold text-amber-200 block">
+                🎨 Độ mờ nền riêng của từng bảng (0% = Mất nền hoàn toàn)
+              </span>
+              <span className="text-[10px] text-stone-400">
+                Kéo về 0% để ẩn khung nền & viền bảng, chỉ giữ lại chữ nổi trên sân chùa
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            {(
+              [
+                {
+                  opKey: 'noticeBoardOpacity',
+                  label: 'Bảng Thông Báo',
+                  defaultOp: hud.hudOpacity ?? 0.88,
+                },
+                {
+                  opKey: 'grandEventOpacity',
+                  label: 'Bảng Sự Kiện Đại Lễ',
+                  defaultOp: hud.hudOpacity ?? 0.88,
+                },
+                {
+                  opKey: 'leaderboardOpacity',
+                  label: 'Bảng Công Đức (BXH)',
+                  defaultOp: hud.hudOpacity ?? 0.88,
+                },
+                {
+                  opKey: 'guideOpacity',
+                  label: 'Bảng Hướng Dẫn',
+                  defaultOp: hud.hudOpacity ?? 0.88,
+                },
+                {
+                  opKey: 'pilgrimCountOpacity',
+                  label: 'Bảng Đếm Phật Tử',
+                  defaultOp: hud.hudOpacity ?? 0.88,
+                },
+                {
+                  opKey: 'toastOpacity',
+                  label: 'Bảng Toast Dâng Lễ',
+                  defaultOp: hud.hudOpacity ?? 0.88,
+                },
+                {
+                  opKey: 'templeSignOpacity',
+                  label: 'Bảng Tên Chùa (PNG)',
+                  defaultOp: 1,
+                },
+              ] as const
+            ).map(({ opKey, label, defaultOp }) => {
+              const curOp =
+                typeof hud[opKey] === 'number' ? (hud[opKey] as number) : defaultOp;
+              const pct = Math.round(curOp * 100);
+              return (
+                <div
+                  key={opKey}
+                  className="px-2 py-1 rounded bg-stone-900/90 border border-stone-800 flex items-center justify-between gap-2"
+                >
+                  <span className="text-[10.5px] font-semibold text-stone-200 truncate w-32 shrink-0">
+                    {label}
+                  </span>
+                  <div className="flex items-center gap-1.5 flex-1 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateHudLayout({ [opKey]: 0 })}
+                      className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono cursor-pointer transition shrink-0 ${
+                        pct === 0
+                          ? 'bg-amber-400 text-stone-950 font-bold'
+                          : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                      }`}
+                      title="Đặt độ mờ nền = 0% (Mất nền)"
+                    >
+                      0%
+                    </button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={curOp}
+                      onChange={(e) =>
+                        onUpdateHudLayout({
+                          [opKey]: parseFloat(e.target.value),
+                        })
+                      }
+                      className="w-24 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                    />
+                    <span className="w-10 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
+                      {pct}%
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Quản lý thêm / bớt các dòng trong Bảng Hướng Dẫn */}
+        <div className="p-2.5 rounded-lg bg-stone-950/90 border border-emerald-500/35 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-bold text-emerald-200 block">
+                📋 Các dòng trong Bảng Hướng Dẫn ({(hud.guideItems ?? DEFAULT_GUIDE_ITEMS).length} dòng)
+              </span>
+              <span className="text-[10px] text-stone-400">
+                Cho phép thêm dòng mới, sửa nội dung hoặc xóa bớt các dòng không dùng
+              </span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const currentList = hud.guideItems ?? DEFAULT_GUIDE_ITEMS;
+                  const nextItem: GuideTaskItem = {
+                    id: `guide-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                    label: 'Mục mới',
+                    shortDesc: 'Nội dung hướng dẫn',
+                    modelType: 'rose',
+                    colorTheme: 'amber',
+                  };
+                  onUpdateHudLayout({ guideItems: [...currentList, nextItem] });
+                }}
+                className="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Thêm dòng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateHudLayout({ guideItems: DEFAULT_GUIDE_ITEMS })
+                }
+                title="Khôi phục 7 dòng hướng dẫn mặc định"
+                className="px-1.5 py-1 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+            {(hud.guideItems ?? DEFAULT_GUIDE_ITEMS).map((item, idx) => {
+              const currentList = hud.guideItems ?? DEFAULT_GUIDE_ITEMS;
+              const updateItem = (patch: Partial<GuideTaskItem>) => {
+                const next = currentList.map((it, i) =>
+                  i === idx ? { ...it, ...patch } : it
+                );
+                onUpdateHudLayout({ guideItems: next });
+              };
+              const removeItem = () => {
+                const next = currentList.filter((_, i) => i !== idx);
+                onUpdateHudLayout({ guideItems: next });
+              };
+
+              return (
+                <div
+                  key={item.id || idx}
+                  className="p-1.5 rounded-lg bg-stone-900 border border-stone-800 flex items-center gap-1.5"
+                >
+                  <select
+                    value={item.modelType || 'none'}
+                    onChange={(e) =>
+                      updateItem({
+                        modelType: e.target.value as GuideTaskItem['modelType'],
+                      })
+                    }
+                    className="px-1.5 py-1 rounded bg-stone-950 border border-stone-700 text-[10px] text-amber-300 shrink-0 focus:outline-none"
+                    title="Chọn icon lễ vật bên trái dòng"
+                  >
+                    <option value="none">Không icon</option>
+                    <option value="rose">🌹 Sen hồng</option>
+                    <option value="lotus">🪷 Sen vàng</option>
+                    <option value="tray">🍑 Mâm quả</option>
+                    <option value="special_tray">👑 Mâm đặc biệt</option>
+                    <option value="incense">🕯️ Nhang</option>
+                  </select>
+
+                  <input
+                    type="text"
+                    value={item.label}
+                    onChange={(e) => updateItem({ label: e.target.value })}
+                    placeholder="Tên quà/mục..."
+                    className="w-24 px-1.5 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] font-bold text-amber-200 focus:outline-none focus:border-amber-500 shrink-0"
+                  />
+
+                  <input
+                    type="text"
+                    value={item.shortDesc}
+                    onChange={(e) => updateItem({ shortDesc: e.target.value })}
+                    placeholder="Mô tả..."
+                    className="flex-1 min-w-0 px-1.5 py-1 rounded bg-stone-950 border border-stone-800 text-[11px] text-stone-100 focus:outline-none focus:border-amber-500"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={removeItem}
+                    title="Xóa dòng này khỏi Bảng Hướng Dẫn"
+                    className="p-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-500/30 cursor-pointer shrink-0 transition"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 

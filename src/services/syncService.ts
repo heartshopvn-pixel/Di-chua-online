@@ -16,6 +16,8 @@ type TikTokEventListener = (event: {
 type StatusListener = (status: WsConnectionStatus) => void;
 type PeerCountListener = (counts: { totalPeers: number; obsPeers: number }) => void;
 
+const FOCUS_TIMER_ALERT_URL = 'https://heartsmithvn.github.io/Focus-timer/?ring=1';
+
 class LiveSyncService {
   private clientId = `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   private channel: BroadcastChannel | null = null;
@@ -27,6 +29,39 @@ class LiveSyncService {
   private peerListeners = new Set<PeerCountListener>();
   private status: WsConnectionStatus = 'simulated';
   private recentPacketTimestamps = new Set<number>();
+  private wasWsConnectedOnce = false;
+  private lastAlertOpenedAt = 0;
+
+  private isObsView(): boolean {
+    if (typeof window === 'undefined') return false;
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.get('obs') === '1' ||
+      params.get('view') === 'live' ||
+      params.get('mode') === 'live'
+    );
+  }
+
+  public triggerFocusTimerAlert(force = false) {
+    if (typeof window === 'undefined') return;
+    // Không tự bung tab trên màn hình ?obs=1 bên trong TikTok Live Studio
+    if (!force && this.isObsView()) return;
+    const now = Date.now();
+    if (!force && now - this.lastAlertOpenedAt < 60000) return;
+    this.lastAlertOpenedAt = now;
+
+    try {
+      const a = document.createElement('a');
+      a.href = FOCUS_TIMER_ALERT_URL;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch {
+      // Fallback
+    }
+  }
 
   constructor() {
     if ('BroadcastChannel' in window) {
@@ -227,6 +262,7 @@ class LiveSyncService {
       this.ws = socket;
 
       socket.onopen = () => {
+        this.wasWsConnectedOnce = true;
         this.setStatus('connected');
       };
 
@@ -322,6 +358,11 @@ class LiveSyncService {
             return;
           }
 
+          if (raw.type === 'live_alert') {
+            this.triggerFocusTimerAlert(false);
+            return;
+          }
+
           // Format 1: Custom Node.js server.js bridge ({ type: 'chat' | 'gift' | 'like' | 'follow', ... })
           if (
             raw.type === 'chat' ||
@@ -377,7 +418,11 @@ class LiveSyncService {
       };
 
       socket.onclose = () => {
+        const hadActiveConnection = this.wasWsConnectedOnce;
         this.setStatus('simulated');
+        if (hadActiveConnection) {
+          this.triggerFocusTimerAlert(false);
+        }
         if (this.shouldReconnectWs && this.lastWsUrl) {
           if (this.reconnectWsTimer) clearTimeout(this.reconnectWsTimer);
           this.reconnectWsTimer = setTimeout(() => {

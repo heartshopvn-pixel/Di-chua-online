@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Check, Copy, Plug } from 'lucide-react';
+import { BellRing, Check, Copy, ExternalLink, Plug } from 'lucide-react';
 import { NODE_SERVER_CODE } from '../../config/constants';
-import { WsConnectionStatus } from '../../services/syncService';
+import { syncService, WsConnectionStatus } from '../../services/syncService';
 
 interface TabTikTokNodeProps {
   wsStatus: WsConnectionStatus;
@@ -78,6 +78,32 @@ export const TabTikTokNode: React.FC<TabTikTokNodeProps> = ({ wsStatus, onConnec
         </div>
       </section>
 
+      {/* Section 1.5: Cảnh báo tự động mở Focus-timer khi đứt kết nối / sập Live */}
+      <section className="p-3 rounded-xl bg-rose-950/35 border border-rose-500/45 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <BellRing className="w-4 h-4 text-rose-400 animate-pulse" />
+            <h2 className="text-xs font-bold text-rose-200">
+              Báo Động Tự Động Khi Node Đứt Kết Nối / Sập Live
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={() => syncService.triggerFocusTimerAlert(true)}
+            className="px-2.5 py-1 rounded-md bg-rose-600 hover:bg-rose-500 text-white text-[10.5px] font-bold flex items-center gap-1 cursor-pointer transition shrink-0"
+          >
+            <ExternalLink className="w-3 h-3" />
+            <span>Test mở Focus-timer</span>
+          </button>
+        </div>
+        <p className="text-[11px] text-stone-300 leading-relaxed">
+          Khi <code className="text-amber-300">server.js</code> phát hiện đứt kết nối TikTok Live (<code className="text-rose-300">disconnected</code>), kết thúc / sập phiên Live (<code className="text-rose-300">streamEnd</code>), hoặc khi cửa sổ CMD bị tắt đột ngột, hệ thống sẽ tự động bật trình duyệt mở ngay link báo động:
+        </p>
+        <div className="px-2.5 py-1.5 rounded bg-stone-950/90 border border-rose-500/30 font-mono text-[10.5px] text-amber-300 break-all select-all">
+          https://heartsmithvn.github.io/Focus-timer/?ring=1
+        </div>
+      </section>
+
       <hr className="border-stone-800/80" />
 
       {/* Section 2: Quick OBS Setup Checklist */}
@@ -106,7 +132,7 @@ export const TabTikTokNode: React.FC<TabTikTokNodeProps> = ({ wsStatus, onConnec
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xs font-semibold text-stone-200">
-              Mã nguồn <code className="text-amber-300">server.js</code> (TikTok Live + Edge-TTS)
+              Mã nguồn <code className="text-amber-300">server.js</code> (TikTok Live + Edge-TTS + Báo động Focus-timer)
             </h2>
             <p className="text-[10px] text-stone-400 font-mono mt-0.5">
               npm i tiktok-live-connector ws express cors msedge-tts

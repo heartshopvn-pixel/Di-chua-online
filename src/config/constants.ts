@@ -4,6 +4,7 @@ import {
   DharmaArticleItem,
   DonorEntry,
   GameConfig,
+  GuideTaskItem,
   KneelSlot,
   TempleMonkData,
 } from '../types/game';
@@ -45,6 +46,18 @@ export const RED_PRAY_ZONES = {
   left: { minX: 30, maxX: 220, minY: 645, maxY: 925 },
   right: { minX: 320, maxX: 510, minY: 645, maxY: 925 },
 };
+
+/**
+ * Hàm tính tỉ lệ phối cảnh chiều sâu (depthScale) đồng bộ cho toàn bộ nhân vật trên sân (Phật tử, Sư trụ trì, Chú tiểu):
+ * - y = 460 (xa nhất trên bục chánh điện) -> 0.48
+ * - y = 950 (gần nhất ở cổng tam quan) -> 1.00
+ */
+export function getCharacterDepthScale(y: number): number {
+  const minY = 460;
+  const maxY = 950;
+  const t = Math.max(0, Math.min(1, (y - minY) / (maxY - minY)));
+  return 0.48 + t * 0.52;
+}
 
 export const INITIAL_MONKS: TempleMonkData[] = [
   {
@@ -124,6 +137,58 @@ export const DEFAULT_DHARMA_ARTICLES: DharmaArticleItem[] = [
     title: 'Bài 3: Buông Bỏ Phiền Não Giữa Đời Thường',
     content:
       'Đời người ngắn ngủi như chớp mắt, hơn thua được mất rồi cũng trả lại cho thế gian. Học cách mỉm cười trước nghịch cảnh, buông bớt chấp niệm nặng nề để lòng nhẹ tựa hoa sen. Cầu nguyện cho tất cả Phật tử hiện diện nơi chánh điện Kim Thiền Tự luôn khỏe mạnh và bình an.',
+  },
+];
+
+export const DEFAULT_GUIDE_ITEMS: GuideTaskItem[] = [
+  {
+    id: 'rose',
+    modelType: 'rose',
+    label: 'Hoa hồng',
+    shortDesc: 'Dâng sen hồng',
+    colorTheme: 'pink',
+  },
+  {
+    id: 'lotus',
+    modelType: 'lotus',
+    label: 'Bắn tim',
+    shortDesc: 'Dâng sen vàng',
+    colorTheme: 'amber',
+  },
+  {
+    id: 'tray',
+    modelType: 'tray',
+    label: 'Rosa',
+    shortDesc: 'Dâng mâm quả',
+    colorTheme: 'amber',
+  },
+  {
+    id: 'special_tray',
+    modelType: 'special_tray',
+    label: 'Đặc biệt',
+    shortDesc: 'Hào quang + Zoom',
+    colorTheme: 'yellow',
+  },
+  {
+    id: 'like',
+    modelType: 'none',
+    label: 'Thả tim',
+    shortDesc: '+1 hoa sen',
+    colorTheme: 'pink',
+  },
+  {
+    id: 'follow',
+    modelType: 'none',
+    label: 'Follow',
+    shortDesc: '+100 hoa sen',
+    colorTheme: 'emerald',
+  },
+  {
+    id: 'comment',
+    modelType: 'incense',
+    label: 'Bình luận',
+    shortDesc: 'Ước nguyện',
+    colorTheme: 'stone',
   },
 ];
 
@@ -219,6 +284,8 @@ export const DEFAULT_CONFIG: GameConfig = {
   cameraSpecialGiftLockSec: 3,
   cameraZoomScale: 2.25,
   cameraSmoothSpeed: 4.5,
+  cameraFocusOffsetX: 0,
+  cameraFocusOffsetY: -44,
 
   characterScale: 1.0,
   nameTagFontFamily: 'Inter, system-ui, sans-serif',
@@ -260,8 +327,8 @@ export const DEFAULT_CONFIG: GameConfig = {
     pilgrimCountBox: { x: 12, y: 152, width: 136, height: 32 },
     // Bảng Thông Báo cố định (Cho phép sửa nội dung, chỉnh size chữ, ẩn/hiện)
     noticeBoardBox: { x: 12, y: 190, width: 168, height: 76 },
-    // Hình đen bên trái: Bảng thông báo trôi lên rồi mờ biến mất
-    toastBox: { x: 12, y: 274, width: 168, height: 38 },
+    // Hình đen bên trái: Bảng Toast Dâng Lễ & Thông báo sự kiện
+    toastBox: { x: 12, y: 274, width: 168, height: 54 },
     leaderboardTitle: 'Bảng công đức',
     guideTitle: 'Bảng hướng dẫn',
     grandEventTitle: 'Sự kiện Đại Lễ',
@@ -285,6 +352,14 @@ export const DEFAULT_CONFIG: GameConfig = {
     showNewPilgrimToast: true,
     leaderboardMaxRanks: 5,
     hudOpacity: 0.88,
+    noticeBoardOpacity: 0.88,
+    grandEventOpacity: 0.88,
+    leaderboardOpacity: 0.88,
+    guideOpacity: 0.88,
+    pilgrimCountOpacity: 0.88,
+    toastOpacity: 0.88,
+    templeSignOpacity: 1.0,
+    guideItems: DEFAULT_GUIDE_ITEMS,
     editLayoutMode: false,
   },
 };
@@ -375,9 +450,10 @@ export const SAMPLE_PRAYERS = [
   'Thành tâm lễ Phật, cầu cho mọi người trong phòng live bình an',
 ];
 
-export const NODE_SERVER_CODE = `// File: server.js (Tích hợp TikTok Live v1/v2 + Giọng đọc AI HoaiMy/NamMinh miễn phí)
+export const NODE_SERVER_CODE = `// File: server.js (Tích hợp TikTok Live v1/v2 + Giọng đọc AI + Tự mở Focus-timer khi đứt kết nối / sập Live)
 const express = require('express');
 const cors = require('cors');
+const { exec } = require('child_process');
 const tiktokPkg = require('tiktok-live-connector');
 const TikTokConnector = tiktokPkg.WebcastPushConnection || tiktokPkg.TikTokLiveConnection;
 const { WebSocketServer } = require('ws');
@@ -386,6 +462,36 @@ let MsEdgeTTS, OUTPUT_FORMAT;
 try {
   ({ MsEdgeTTS, OUTPUT_FORMAT } = require('msedge-tts'));
 } catch (e) {}
+
+// Link báo động tự động mở khi Node đứt kết nối hoặc sập phiên Live
+const ALERT_URL = "https://heartsmithvn.github.io/Focus-timer/?ring=1";
+let lastAlertOpenedAt = 0;
+
+function openAlertLink(reason) {
+  const now = Date.now();
+  // Chống mở trùng lặp liên tiếp (cách nhau tối thiểu 60 giây giữa 2 lần báo động)
+  if (now - lastAlertOpenedAt < 60000) return;
+  lastAlertOpenedAt = now;
+  console.warn(\`\\n[BÁO ĐỘNG KHẨN] \${reason} -> Đang tự động mở link thông báo: \${ALERT_URL}\\n\`);
+
+  const cmd =
+    process.platform === 'win32'
+      ? \`start "" "\${ALERT_URL}"\`
+      : process.platform === 'darwin'
+      ? \`open "\${ALERT_URL}"\`
+      : \`xdg-open "\${ALERT_URL}"\`;
+
+  exec(cmd, (err) => {
+    if (err) console.error('[LỖI MỞ TRÌNH DUYỆT BÁO ĐỘNG]:', err.message);
+  });
+
+  broadcast({
+    type: 'live_alert',
+    reason,
+    url: ALERT_URL,
+    ts: now,
+  });
+}
 
 // 1. Tạo Server HTTP cấp phát Giọng Đọc AI Miễn Phí cho Web & OBS Browser Source
 const app = express();
@@ -505,6 +611,8 @@ wss.on('connection', ws => {
 
 let isConnecting = false;
 let isConnected = false;
+let hadConnectedBefore = false;
+let consecutiveFailCount = 0;
 
 function connectTikTok() {
   if (isConnecting || isConnected) return;
@@ -513,11 +621,17 @@ function connectTikTok() {
   tiktok.connect().then(state => {
     isConnecting = false;
     isConnected = true;
+    hadConnectedBefore = true;
+    consecutiveFailCount = 0;
     console.log(\`[THÀNH CÔNG] Đã kết nối phòng Live: \${state.roomId || TIKTOK_USERNAME}\`);
   }).catch(err => {
     isConnecting = false;
     isConnected = false;
+    consecutiveFailCount++;
     console.error('[LỖI KẾT NỐI TIKTOK]:', err?.message || err);
+    if (hadConnectedBefore || consecutiveFailCount >= 2) {
+      openAlertLink('Không thể kết nối lại luồng TikTok Live: ' + (err?.message || 'Lỗi kết nối'));
+    }
     console.log('-> Tự động thử kết nối lại sau 8 giây...');
     setTimeout(connectTikTok, 8000);
   });
@@ -528,17 +642,24 @@ connectTikTok();
 tiktok.on('disconnected', () => {
   isConnected = false;
   console.warn('[MẤT KẾT NỐI] Luồng TikTok Live bị ngắt! Đang tự động kết nối lại sau 5 giây...');
+  openAlertLink('Node bị đứt kết nối với phòng TikTok Live');
   setTimeout(connectTikTok, 5000);
 });
 
 tiktok.on('streamEnd', () => {
   isConnected = false;
-  console.warn('[KẾT THÚC LIVE] TikTok báo phiên Live đã kết thúc. Sẽ kiểm tra lại sau 15 giây...');
+  console.warn('[KẾT THÚC LIVE] TikTok báo phiên Live đã kết thúc / sập Live. Sẽ kiểm tra lại sau 15 giây...');
+  openAlertLink('Phiên Live TikTok vừa kết thúc hoặc bị sập');
   setTimeout(connectTikTok, 15000);
 });
 
 tiktok.on('error', err => {
   console.error('[CẢNH BÁO LUỒNG TIKTOK]:', err?.message || err);
+});
+
+process.on('uncaughtException', err => {
+  console.error('[LỖI NGHIÊM TRỌNG NODE]:', err?.message || err);
+  openAlertLink('Node server gặp sự cố bất ngờ');
 });
 
 setInterval(() => {

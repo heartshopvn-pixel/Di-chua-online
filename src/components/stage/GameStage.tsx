@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   BurnerLotusBurstFX,
   CameraFocusState,
@@ -20,6 +20,7 @@ import { PilgrimSprite } from './PilgrimSprite';
 import { MonkSprite } from './MonkSprite';
 import { HudBoxKey, ResizeCorner, StageHud } from './StageHud';
 import { OfferingModelArt } from './OfferingModelArt';
+import { getCharacterDepthScale } from '../../config/constants';
 
 export type ZoneKey = 'monk' | 'leftPray' | 'rightPray';
 export type RectEdge = 'top' | 'bottom' | 'left' | 'right';
@@ -326,7 +327,7 @@ export const GameStage: React.FC<GameStageProps> = ({
     };
   }, []);
 
-  // Keep latest props in ref for 60fps Canvas FX & Smooth Camera loop
+  // Keep latest props in ref synchronously so Camera & Canvas FX are never 1 frame stale
   const fxStateRef = useRef({
     incenseBurner: config.incenseBurner,
     showWaypoints: config.showWaypoints,
@@ -337,32 +338,114 @@ export const GameStage: React.FC<GameStageProps> = ({
     pilgrims,
     cameraZoomScale: config.cameraZoomScale ?? 2.25,
     cameraSmoothSpeed: config.cameraSmoothSpeed ?? 4.5,
+    cameraFocusOffsetX: config.cameraFocusOffsetX ?? 0,
+    cameraFocusOffsetY: config.cameraFocusOffsetY ?? -44,
   });
-  useEffect(() => {
-    fxStateRef.current = {
-      incenseBurner: config.incenseBurner,
-      showWaypoints: config.showWaypoints,
-      vipSlots,
-      normalSlots,
-      goldenLotusRainUntil,
-      cameraFocus,
-      pilgrims,
-      cameraZoomScale: config.cameraZoomScale ?? 2.25,
-      cameraSmoothSpeed: config.cameraSmoothSpeed ?? 4.5,
-    };
-  }, [
-    config.incenseBurner,
-    config.showWaypoints,
-    config.cameraZoomScale,
-    config.cameraSmoothSpeed,
+  fxStateRef.current = {
+    incenseBurner: config.incenseBurner,
+    showWaypoints: config.showWaypoints,
     vipSlots,
     normalSlots,
     goldenLotusRainUntil,
     cameraFocus,
     pilgrims,
-  ]);
+    cameraZoomScale: config.cameraZoomScale ?? 2.25,
+    cameraSmoothSpeed: config.cameraSmoothSpeed ?? 4.5,
+    cameraFocusOffsetX: config.cameraFocusOffsetX ?? 0,
+    cameraFocusOffsetY: config.cameraFocusOffsetY ?? -44,
+  };
 
   const camRigRef = useRef({ x: 270, y: 480, zoom: 1 });
+  const prevTargetRef = useRef<{ id: number | null; x: number; y: number }>({
+    id: null,
+    x: 270,
+    y: 480,
+  });
+  const lastCamStepMsRef = useRef<number>(performance.now());
+
+  const stepCameraRig = useCallback((now: number) => {
+    const rawDt = (now - lastCamStepMsRef.current) / 1000;
+    const dt = Math.max(0.001, Math.min(0.1, rawDt));
+    lastCamStepMsRef.current = now;
+
+    const st = fxStateRef.current;
+    const isFocusValid =
+      Boolean(st.cameraFocus.pilgrimId) && Date.now() < st.cameraFocus.until;
+    const targetPilgrim = isFocusValid
+      ? st.pilgrims.find((p) => p.id === st.cameraFocus.pilgrimId)
+      : undefined;
+
+    let desiredZoom = 1;
+    let desiredX = 270;
+    let desiredY = 480;
+
+    if (targetPilgrim) {
+      desiredZoom = Math.max(1.2, Math.min(3.4, st.cameraZoomScale || 2.25));
+      const offsetX =
+        typeof st.cameraFocusOffsetX === 'number' ? st.cameraFocusOffsetX : 0;
+      const offsetY =
+        typeof st.cameraFocusOffsetY === 'number' ? st.cameraFocusOffsetY : -44;
+      const minX = 270 / desiredZoom;
+      const maxX = 540 - 270 / desiredZoom;
+      const minY = 480 / desiredZoom;
+      const maxY = 960 - 480 / desiredZoom;
+      desiredX = Math.max(minX, Math.min(maxX, targetPilgrim.x + offsetX));
+      desiredY = Math.max(minY, Math.min(maxY, targetPilgrim.y + offsetY));
+    }
+
+    const rig = camRigRef.current;
+    const smoothSpeed = Math.max(1.2, Math.min(14, st.cameraSmoothSpeed || 4.5));
+    const lerpAlpha = 1 - Math.exp(-smoothSpeed * dt);
+
+    if (targetPilgrim) {
+      if (prevTargetRef.current.id === targetPilgrim.id) {
+        // Feed-forward chính xác độ dịch chuyển của nhân vật trong cùng frame
+        // giúp khoảng cách tương đối giữa Camera và nhân vật/bong bóng chat = 0 tuyệt đối khi đã khóa mục tiêu
+        rig.x += desiredX - prevTargetRef.current.x;
+        rig.y += desiredY - prevTargetRef.current.y;
+      }
+      prevTargetRef.current.id = targetPilgrim.id;
+      prevTargetRef.current.x = desiredX;
+      prevTargetRef.current.y = desiredY;
+    } else {
+      prevTargetRef.current.id = null;
+    }
+
+    rig.x += (desiredX - rig.x) * lerpAlpha;
+    rig.y += (desiredY - rig.y) * lerpAlpha;
+    rig.zoom += (desiredZoom - rig.zoom) * lerpAlpha;
+
+    if (
+      desiredZoom === 1 &&
+      Math.abs(rig.zoom - 1) < 0.001 &&
+      Math.hypot(rig.x - 270, rig.y - 480) < 0.25
+    ) {
+      rig.zoom = 1;
+      rig.x = 270;
+      rig.y = 480;
+    }
+
+    if (worldCameraRef.current) {
+      const tx = 270 - rig.x;
+      const ty = 480 - rig.y;
+      worldCameraRef.current.style.transform = `translate3d(0, 0, 0) scale(${rig.zoom.toFixed(
+        4
+      )}) translate3d(${tx.toFixed(2)}px, ${ty.toFixed(2)}px, 0)`;
+    }
+  }, []);
+
+  // Đồng bộ Camera ngay trong pha commit DOM (trước khi trình duyệt vẽ hình) mỗi khi tọa độ nhân vật cập nhật
+  useLayoutEffect(() => {
+    stepCameraRig(performance.now());
+  }, [
+    pilgrims,
+    cameraFocus,
+    config.cameraZoomScale,
+    config.cameraSmoothSpeed,
+    config.cameraFocusOffsetX,
+    config.cameraFocusOffsetY,
+    stepCameraRig,
+  ]);
 
   // Canvas 2D Smoke, Optional Position Circles & 3-Second Full-Screen Golden Lotus Rain Loop
   useEffect(() => {
@@ -419,52 +502,9 @@ export const GameStage: React.FC<GameStageProps> = ({
       lastTime = now;
       const timeSec = now / 1000;
 
-      // 60fps Smooth Pan & Zoom Camera Interpolation (Không bị cut màn hình)
-      const st = fxStateRef.current;
-      const isFocusValid =
-        Boolean(st.cameraFocus.pilgrimId) && Date.now() < st.cameraFocus.until;
-      const targetPilgrim = isFocusValid
-        ? st.pilgrims.find((p) => p.id === st.cameraFocus.pilgrimId)
-        : undefined;
-
-      let desiredZoom = 1;
-      let desiredX = 270;
-      let desiredY = 480;
-
-      if (targetPilgrim) {
-        desiredZoom = Math.max(1.2, Math.min(3.4, st.cameraZoomScale || 2.25));
-        const minX = 270 / desiredZoom;
-        const maxX = 540 - 270 / desiredZoom;
-        const minY = 480 / desiredZoom;
-        const maxY = 960 - 480 / desiredZoom;
-        desiredX = Math.max(minX, Math.min(maxX, targetPilgrim.x));
-        desiredY = Math.max(minY, Math.min(maxY, targetPilgrim.y - 44));
-      }
-
-      const rig = camRigRef.current;
-      const smoothSpeed = Math.max(1.2, Math.min(14, st.cameraSmoothSpeed || 4.5));
-      const lerpAlpha = 1 - Math.exp(-smoothSpeed * dt);
-
-      rig.x += (desiredX - rig.x) * lerpAlpha;
-      rig.y += (desiredY - rig.y) * lerpAlpha;
-      rig.zoom += (desiredZoom - rig.zoom) * lerpAlpha;
-
-      if (
-        desiredZoom === 1 &&
-        Math.abs(rig.zoom - 1) < 0.001 &&
-        Math.hypot(rig.x - 270, rig.y - 480) < 0.25
-      ) {
-        rig.zoom = 1;
-        rig.x = 270;
-        rig.y = 480;
-      }
-
-      if (worldCameraRef.current) {
-        const tx = 270 - rig.x;
-        const ty = 480 - rig.y;
-        worldCameraRef.current.style.transform = `scale(${rig.zoom.toFixed(
-          4
-        )}) translate(${tx.toFixed(2)}px, ${ty.toFixed(2)}px)`;
+      // Nếu giữa 2 lần React render chưa bước Camera (ví dụ khi đang zoom ra màn hình mặc định), cập nhật mượt ở 60fps
+      if (now - lastCamStepMsRef.current >= 8) {
+        stepCameraRig(now);
       }
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -472,9 +512,10 @@ export const GameStage: React.FC<GameStageProps> = ({
       // Chỉ vẽ các vòng tròn đệm vị trí dưới sàn khi bật "Hiện vòng tròn vị trí" (showWaypoints)
       if (fxStateRef.current.showWaypoints) {
         fxStateRef.current.vipSlots.forEach((s) => {
+          const depthScale = getCharacterDepthScale(s.y);
           ctx.save();
           ctx.beginPath();
-          ctx.ellipse(s.x, s.y + 3, 15, 5.5, 0, 0, Math.PI * 2);
+          ctx.ellipse(s.x, s.y + 3, 18 * depthScale, 6.2 * depthScale, 0, 0, Math.PI * 2);
           ctx.fillStyle = 'rgba(30, 58, 138, 0.82)';
           ctx.fill();
           ctx.lineWidth = 1.4;
@@ -484,8 +525,7 @@ export const GameStage: React.FC<GameStageProps> = ({
         });
 
         fxStateRef.current.normalSlots.forEach((s) => {
-          const t = Math.max(0, Math.min(1, (s.y - 550) / (950 - 550)));
-          const depthScale = 0.6 + t * 0.4;
+          const depthScale = getCharacterDepthScale(s.y);
           ctx.save();
           ctx.beginPath();
           ctx.ellipse(s.x, s.y + 3, 17 * depthScale, 6 * depthScale, 0, 0, Math.PI * 2);

@@ -1,4 +1,5 @@
 import React from 'react';
+import { getCharacterDepthScale } from '../../config/constants';
 import { useProcessedSpriteFrames } from '../../services/spriteProcessor';
 import { CustomAssetsConfig, PilgrimData, PilgrimFrameIndex, Point2D } from '../../types/game';
 import { OfferingModelArt } from './OfferingModelArt';
@@ -65,7 +66,10 @@ export function getPilgrimFrameIndex(p: PilgrimData): PilgrimFrameIndex {
       return 7;
 
     case 'ceremony_at_burner':
-      // Thắp nhang trước lư hương (Frame 4)
+      // Thắp nhang trước lư hương (Frame 4), sau đó bái lạy 1 cái (Frame 6) rồi mới bắt đầu hành động kế tiếp
+      if (p.stateTimer <= 0.82 && p.stateTimer > 0.18) {
+        return 6;
+      }
       return 4;
 
     case 'walk_to_vip_check':
@@ -209,21 +213,27 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
         : customAssets.pilgrimMaleSpritesheetUrl;
     const processedFrames = useProcessedSpriteFrames(sheetUrl, 10);
 
-    // Phối cảnh chiều sâu nhân với hệ số size nhân vật chung (characterScale)
-    const minY = 550;
-    const maxY = 950;
-    const t = Math.max(0, Math.min(1, (y - minY) / (maxY - minY)));
-    const depthScale = 0.6 + t * 0.4;
+    // Phối cảnh chiều sâu đồng bộ nhân với hệ số size nhân vật chung (characterScale)
+    const depthScale = getCharacterDepthScale(y);
     const scale = depthScale * characterScale;
 
     const frameIndex = getPilgrimFrameIndex(pilgrim);
     const isSideFrame = frameIndex === 8 || frameIndex === 9;
     const flipX = isSideFrame && facingLeft ? -1 : 1;
 
-    // Điều chỉnh vị trí bong bóng chat hạ thấp tương ứng khi nhân vật ngồi xuống (frame 5) hoặc bái lạy / gõ mõ (frame 6)
-    const bubbleBottomPx =
-      frameIndex === 6 ? 56 : frameIndex === 5 ? 74 : 104;
-    const rippleBottomPx = bubbleBottomPx + 22;
+    // Giữ kích thước bong bóng chat không bị thu nhỏ khi đi xa, nhưng neo vị trí đáy bong bóng sát đỉnh đầu thực tế của nhân vật (kể cả khi đi xa dần, ngồi thiền hay cúi bái lạy)
+    const unscaledHeadTopPx =
+      frameIndex === 6
+        ? 32
+        : frameIndex === 5
+        ? 58
+        : frameIndex === 7
+        ? 102
+        : 97;
+    const bubbleBottomPx = unscaledHeadTopPx * scale + 4;
+    const rippleBottomPx = bubbleBottomPx + 24;
+    const fixedBubbleScale = (chatBubbleScale * 0.86).toFixed(2);
+    const fixedNameScale = (nameTagScale * 0.86).toFixed(2);
 
     const avatarInitial = (username || 'P').trim().charAt(0).toUpperCase();
     const isLeaving =
@@ -276,57 +286,40 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
 
     return (
       <div
-        className="absolute w-[74px] h-[108px] origin-bottom pointer-events-none will-change-transform"
+        className="absolute top-0 left-0 w-[74px] h-[108px] pointer-events-none will-change-transform"
         style={{
-          left: `${x - 37}px`,
-          top: `${y - 102}px`,
-          transform: `scale(${scale.toFixed(3)})`,
+          transform: `translate3d(${(x - 37).toFixed(2)}px, ${(y - 102).toFixed(2)}px, 0)`,
           zIndex: Math.round(y),
         }}
       >
-        {/* Vòng đánh dấu khi người dùng đang điều khiển trực tiếp nhân vật này (AWSD/Q) */}
-        {isControlled && (
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-4 rounded-full border-2 border-cyan-300 bg-cyan-400/25 shadow-[0_0_12px_#22d3ee] animate-pulse -z-10" />
-        )}
-
-        {/* Ánh hào quang hoàng kim rực rỡ cho quà Đặc Biệt (>10 coin) */}
-        {hasGoldenAura && (
-          <div className="absolute inset-x-[-18px] top-[2px] bottom-[-6px] pointer-events-none -z-10 flex items-center justify-center">
-            <div className="w-[96px] h-[96px] rounded-full bg-gradient-to-t from-amber-500/45 via-yellow-300/55 to-amber-200/20 blur-[6px] animate-pulse" />
-            <div
-              className="absolute w-[84px] h-[84px] rounded-full border-2 border-yellow-300/80 shadow-[0_0_20px_#facc15] animate-spin"
-              style={{ animationDuration: '6s' }}
-            />
-          </div>
-        )}
-
         {/* Nhịp Gõ Mõ (Phím Q) */}
         {showWoodenFishRipple && (
           <div
-            className="absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-amber-500 text-stone-950 text-[9px] font-extrabold shadow-md whitespace-nowrap animate-bounce z-40 transition-[bottom] duration-200 ease-out"
-            style={{ bottom: `${rippleBottomPx}px` }}
+            className="absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-amber-500 text-stone-950 text-[9px] font-extrabold shadow-md whitespace-nowrap animate-bounce z-40"
+            style={{ bottom: `${rippleBottomPx.toFixed(2)}px` }}
           >
             🪵 Cốc! Nam Mô A Di Đà Phật
           </div>
         )}
 
-        {/* Bong bóng chat cầu nguyện trên đầu nhân vật (Tự động hạ thấp sát đầu khi ngồi xuống hoặc bái lạy) */}
+        {/* Bong bóng chat cầu nguyện cố định ngay trên đỉnh đầu nhân vật (kể cả khi đi xa dần hoặc cúi bái lạy) */}
         {showChatBubble && (
           <div
             className={`
-              absolute left-1/2 w-max max-w-[168px] px-2 py-1 rounded-lg text-[10px] font-semibold leading-tight text-center backdrop-blur-xs break-words whitespace-normal origin-bottom transition-[bottom] duration-200 ease-out z-30
+              absolute left-1/2 w-max max-w-[172px] px-2 py-1 rounded-lg text-[10px] font-semibold leading-tight text-center break-words whitespace-normal origin-bottom z-30
               ${
                 hasGoldenAura
-                  ? 'bg-stone-950/95 border-2 border-yellow-300 text-yellow-300 shadow-[0_0_14px_rgba(250,204,21,0.75)]'
+                  ? 'bg-stone-950/96 border-2 border-yellow-300 text-yellow-300 shadow-[0_0_14px_rgba(250,204,21,0.75)]'
                   : isVipStyled
-                  ? 'bg-stone-950/92 border-2 border-yellow-400 text-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.45)]'
-                  : 'bg-stone-950/85 border border-stone-500/60 text-stone-100'
+                  ? 'bg-stone-950/95 border-2 border-yellow-400 text-yellow-300 shadow-[0_0_10px_rgba(250,204,21,0.45)]'
+                  : 'bg-stone-950/94 border border-stone-500/70 text-stone-100 shadow-md'
               }
             `}
             style={{
-              bottom: `${bubbleBottomPx}px`,
+              bottom: `${bubbleBottomPx.toFixed(2)}px`,
               fontFamily: chatBubbleFontFamily,
-              transform: `translateX(-50%) scale(${chatBubbleScale.toFixed(2)})`,
+              transform: `translate3d(-50%, 0, 0) scale(${fixedBubbleScale})`,
+              backfaceVisibility: 'hidden',
             }}
           >
             {hasCombo && (
@@ -346,91 +339,117 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
         {!showChatBubble && hasCombo && (
           <div
             key={comboPopKey || comboCount}
-            className="absolute left-1/2 px-2 py-0.5 rounded-md bg-gradient-to-r from-rose-600 via-amber-500 to-yellow-400 border border-yellow-200 text-stone-950 text-[9.5px] font-black shadow-[0_0_10px_rgba(250,204,21,0.8)] whitespace-nowrap z-30 origin-bottom transition-[bottom] duration-200 ease-out"
+            className="absolute left-1/2 px-2 py-0.5 rounded-md bg-gradient-to-r from-rose-600 via-amber-500 to-yellow-400 border border-yellow-200 text-stone-950 text-[9.5px] font-black shadow-[0_0_10px_rgba(250,204,21,0.8)] whitespace-nowrap z-30 origin-bottom"
             style={{
-              bottom: `${bubbleBottomPx}px`,
+              bottom: `${bubbleBottomPx.toFixed(2)}px`,
               fontFamily: chatBubbleFontFamily,
-              transform: `translateX(-50%) scale(${chatBubbleScale.toFixed(2)})`,
+              transform: `translate3d(-50%, 0, 0) scale(${fixedBubbleScale})`,
+              backfaceVisibility: 'hidden',
             }}
           >
             🔥 {giftName || 'COMBO'} x{comboCount}
           </div>
         )}
 
-        {/* Khung hiển thị Nhân vật */}
+        {/* Khung hình thể Nhân vật co giãn theo chiều sâu (depthScale) độc lập với chữ của bong bóng chat */}
         <div
-          className="relative w-full h-full flex items-end justify-center"
+          className="relative w-full h-full origin-bottom pointer-events-none"
           style={{
-            transform: `scaleX(${flipX})`,
+            transform: `scale(${scale.toFixed(3)})`,
           }}
         >
-          {processedFrames && processedFrames[frameIndex] ? (
-            <img
-              src={processedFrames[frameIndex]}
-              alt=""
-              className="w-full h-full object-contain"
-            />
-          ) : null}
+          {/* Vòng đánh dấu khi người dùng đang điều khiển trực tiếp nhân vật này (AWSD/Q) */}
+          {isControlled && (
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-4 rounded-full border-2 border-cyan-300 bg-cyan-400/25 shadow-[0_0_12px_#22d3ee] animate-pulse -z-10" />
+          )}
 
-          {/* Model lễ vật đặt trên 2 tay vươn lên khi đi vào (Frame 7) */}
-          {showOfferingOnHands && (
-            <div className="absolute -top-[6px] left-1/2 -translate-x-1/2 pointer-events-none z-20">
-              <OfferingModelArt
-                type={offeringType || 'rose'}
-                customAssets={customAssets}
-                className="w-7 h-7"
+          {/* Ánh hào quang hoàng kim rực rỡ cho quà Đặc Biệt (>10 coin) */}
+          {hasGoldenAura && (
+            <div className="absolute inset-x-[-18px] top-[2px] bottom-[-6px] pointer-events-none -z-10 flex items-center justify-center">
+              <div className="w-[96px] h-[96px] rounded-full bg-gradient-to-t from-amber-500/45 via-yellow-300/55 to-amber-200/20 blur-[6px] animate-pulse" />
+              <div
+                className="absolute w-[84px] h-[84px] rounded-full border-2 border-yellow-300/80 shadow-[0_0_20px_#facc15] animate-spin"
+                style={{ animationDuration: '6s' }}
               />
             </div>
           )}
 
-          {/* Model lễ vật đang được ném từ tay vào lư hương */}
-          {isThrowingOffering && (
-            <div
-              className="absolute -top-[6px] left-1/2 -translate-x-1/2 pointer-events-none z-30"
-              style={{
-                transform: `translate(${throwTranslateX.toFixed(1)}px, ${throwTranslateY.toFixed(1)}px) scale(${throwScale.toFixed(2)})`,
-                opacity: throwOpacity,
-              }}
-            >
-              <OfferingModelArt
-                type={offeringType || 'rose'}
-                customAssets={customAssets}
-                className="w-8 h-8"
+          {/* Khung hiển thị Nhân vật */}
+          <div
+            className="relative w-full h-full flex items-end justify-center"
+            style={{
+              transform: `scaleX(${flipX})`,
+            }}
+          >
+            {processedFrames && processedFrames[frameIndex] ? (
+              <img
+                src={processedFrames[frameIndex]}
+                alt=""
+                className="w-full h-full object-contain"
               />
+            ) : null}
+
+            {/* Model lễ vật đặt trên 2 tay vươn lên khi đi vào (Frame 7) */}
+            {showOfferingOnHands && (
+              <div className="absolute -top-[6px] left-1/2 -translate-x-1/2 pointer-events-none z-20">
+                <OfferingModelArt
+                  type={offeringType || 'rose'}
+                  customAssets={customAssets}
+                  className="w-7 h-7"
+                />
+              </div>
+            )}
+
+            {/* Model lễ vật đang được ném từ tay vào lư hương */}
+            {isThrowingOffering && (
+              <div
+                className="absolute -top-[6px] left-1/2 -translate-x-1/2 pointer-events-none z-30"
+                style={{
+                  transform: `translate(${throwTranslateX.toFixed(1)}px, ${throwTranslateY.toFixed(1)}px) scale(${throwScale.toFixed(2)})`,
+                  opacity: throwOpacity,
+                }}
+              >
+                <OfferingModelArt
+                  type={offeringType || 'rose'}
+                  customAssets={customAssets}
+                  className="w-8 h-8"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* 3 bông hoa sen nhỏ nằm ngay phía trên tên người chơi (đè lên model người chơi) và bay lên nhẹ nhàng khi Thả Tim */}
+          {showLotusBurst && (
+            <div
+              key={lotusBurstKey || 1}
+              className="absolute bottom-[4px] left-1/2 -translate-x-1/2 w-12 h-5 pointer-events-none z-30 flex items-center justify-center gap-1"
+            >
+              <span className="lotus-head-float-1">
+                <MiniPinkLotusSvg className="w-2.5 h-2.5" />
+              </span>
+              <span className="lotus-head-float-2 -mt-0.5">
+                <MiniPinkLotusSvg className="w-3 h-3" />
+              </span>
+              <span className="lotus-head-float-3">
+                <MiniPinkLotusSvg className="w-2.5 h-2.5" />
+              </span>
             </div>
           )}
         </div>
 
-        {/* 3 bông hoa sen nhỏ nằm ngay phía trên tên người chơi (đè lên model người chơi) và bay lên nhẹ nhàng khi Thả Tim */}
-        {showLotusBurst && (
-          <div
-            key={lotusBurstKey || 1}
-            className="absolute bottom-[4px] left-1/2 -translate-x-1/2 w-12 h-5 pointer-events-none z-30 flex items-center justify-center gap-1"
-          >
-            <span className="lotus-head-float-1">
-              <MiniPinkLotusSvg className="w-2.5 h-2.5" />
-            </span>
-            <span className="lotus-head-float-2 -mt-0.5">
-              <MiniPinkLotusSvg className="w-3 h-3" />
-            </span>
-            <span className="lotus-head-float-3">
-              <MiniPinkLotusSvg className="w-2.5 h-2.5" />
-            </span>
-          </div>
-        )}
-
-        {/* Thẻ tên dưới chân (Có hỗ trợ load Avatar thật hoặc Avatar từ Pool NPC bên trái tên) */}
+        {/* Thẻ tên dưới chân (Giữ scale tĩnh để không bị nhòe/rung chữ khi di chuyển dọc) */}
         <div
           className={`absolute -bottom-[13px] left-1/2 flex items-center gap-1 px-1.5 py-0.5 rounded-md whitespace-nowrap text-[9.5px] font-semibold border z-20 origin-top ${
             hasGoldenAura
-              ? 'border-yellow-300 bg-stone-950/95 text-yellow-300 shadow-[0_0_8px_rgba(250,204,21,0.55)]'
+              ? 'border-yellow-300 bg-stone-950/96 text-yellow-300 shadow-[0_0_8px_rgba(250,204,21,0.55)]'
               : isVipStyled
-              ? 'border-yellow-400 bg-stone-950/95 text-yellow-300'
-              : 'border-stone-500/40 bg-stone-950/85 text-stone-100'
+              ? 'border-yellow-400 bg-stone-950/96 text-yellow-300'
+              : 'border-stone-500/50 bg-stone-950/92 text-stone-100'
           }`}
           style={{
             fontFamily: nameTagFontFamily,
-            transform: `translateX(-50%) scale(${nameTagScale.toFixed(2)})`,
+            transform: `translate3d(-50%, 0, 0) scale(${fixedNameScale})`,
+            backfaceVisibility: 'hidden',
           }}
         >
           {effectiveAvatarSrc ? (

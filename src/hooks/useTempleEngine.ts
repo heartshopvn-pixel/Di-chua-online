@@ -213,6 +213,14 @@ function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined
         : typeof raw.prayDurationSec === 'number' && raw.prayDurationSec >= 3
         ? raw.prayDurationSec
         : DEFAULT_CONFIG.normalPrayDurationSec,
+    cameraFocusOffsetX:
+      typeof raw.cameraFocusOffsetX === 'number' && !Number.isNaN(raw.cameraFocusOffsetX)
+        ? raw.cameraFocusOffsetX
+        : DEFAULT_CONFIG.cameraFocusOffsetX,
+    cameraFocusOffsetY:
+      typeof raw.cameraFocusOffsetY === 'number' && !Number.isNaN(raw.cameraFocusOffsetY)
+        ? raw.cameraFocusOffsetY
+        : DEFAULT_CONFIG.cameraFocusOffsetY,
     spawnPoint: { ...DEFAULT_CONFIG.spawnPoint, ...(raw.spawnPoint || {}) },
     exitPoint: { ...DEFAULT_CONFIG.exitPoint, ...(raw.exitPoint || {}) },
     incenseBurner: { ...DEFAULT_CONFIG.incenseBurner, ...(raw.incenseBurner || {}) },
@@ -233,6 +241,49 @@ function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined
     hudLayout: {
       ...DEFAULT_CONFIG.hudLayout,
       ...(raw.hudLayout || {}),
+      noticeBoardOpacity:
+        typeof raw.hudLayout?.noticeBoardOpacity === 'number'
+          ? raw.hudLayout.noticeBoardOpacity
+          : typeof raw.hudLayout?.hudOpacity === 'number'
+          ? raw.hudLayout.hudOpacity
+          : DEFAULT_CONFIG.hudLayout.noticeBoardOpacity,
+      grandEventOpacity:
+        typeof raw.hudLayout?.grandEventOpacity === 'number'
+          ? raw.hudLayout.grandEventOpacity
+          : typeof raw.hudLayout?.hudOpacity === 'number'
+          ? raw.hudLayout.hudOpacity
+          : DEFAULT_CONFIG.hudLayout.grandEventOpacity,
+      leaderboardOpacity:
+        typeof raw.hudLayout?.leaderboardOpacity === 'number'
+          ? raw.hudLayout.leaderboardOpacity
+          : typeof raw.hudLayout?.hudOpacity === 'number'
+          ? raw.hudLayout.hudOpacity
+          : DEFAULT_CONFIG.hudLayout.leaderboardOpacity,
+      guideOpacity:
+        typeof raw.hudLayout?.guideOpacity === 'number'
+          ? raw.hudLayout.guideOpacity
+          : typeof raw.hudLayout?.hudOpacity === 'number'
+          ? raw.hudLayout.hudOpacity
+          : DEFAULT_CONFIG.hudLayout.guideOpacity,
+      pilgrimCountOpacity:
+        typeof raw.hudLayout?.pilgrimCountOpacity === 'number'
+          ? raw.hudLayout.pilgrimCountOpacity
+          : typeof raw.hudLayout?.hudOpacity === 'number'
+          ? raw.hudLayout.hudOpacity
+          : DEFAULT_CONFIG.hudLayout.pilgrimCountOpacity,
+      toastOpacity:
+        typeof raw.hudLayout?.toastOpacity === 'number'
+          ? raw.hudLayout.toastOpacity
+          : typeof raw.hudLayout?.hudOpacity === 'number'
+          ? raw.hudLayout.hudOpacity
+          : DEFAULT_CONFIG.hudLayout.toastOpacity,
+      templeSignOpacity:
+        typeof raw.hudLayout?.templeSignOpacity === 'number'
+          ? raw.hudLayout.templeSignOpacity
+          : DEFAULT_CONFIG.hudLayout.templeSignOpacity ?? 1,
+      guideItems: Array.isArray(raw.hudLayout?.guideItems)
+        ? raw.hudLayout!.guideItems
+        : DEFAULT_CONFIG.hudLayout.guideItems,
       templeSign: {
         ...DEFAULT_CONFIG.hudLayout.templeSign,
         ...(raw.hudLayout?.templeSign || {}),
@@ -940,7 +991,7 @@ export function useTempleEngine() {
       });
       setTimeout(() => {
         setFloatingToasts((prev) => prev.filter((item) => item.id !== id));
-      }, 3200);
+      }, 7600);
     },
     []
   );
@@ -1634,6 +1685,17 @@ export function useTempleEngine() {
         }
       } else {
         // Sự kiện "NPC"
+        if (coins > 0) {
+          const npcOfferingLabel =
+            coins > 10
+              ? 'Mâm Quả Hoàng Kim'
+              : coins >= 10
+              ? 'Mâm Hoa Quả'
+              : coins >= 5
+              ? 'Hoa Sen Vàng'
+              : 'Hoa Sen Hồng';
+          pushFloatingToast(`${finalUsername} dâng ${npcOfferingLabel}`, true);
+        }
         if (!soundEngine.getBusyState() && nowSec - lastBotTtsSecRef.current > 6) {
           const npcSpeechParts: string[] = [];
           if (coins > 0) {
@@ -1897,15 +1959,17 @@ export function useTempleEngine() {
         existingNormal.prayTimer = freshDur;
         existingNormal.totalPrayDuration = freshDur;
 
-        if (
-          hasComment &&
-          existingNormal.state !== 'walk_in_up' &&
-          existingNormal.state !== 'ceremony_at_burner' &&
-          existingNormal.state !== 'throw_offering_at_burner'
-        ) {
-          releaseSlotById(existingNormal.slotId);
-          existingNormal.slotId = null;
-          existingNormal.state = 'walk_in_up';
+        if (hasComment) {
+          if (existingNormal.state === 'ceremony_at_burner') {
+            existingNormal.stateTimer = 1.65;
+          } else if (
+            existingNormal.state !== 'walk_in_up' &&
+            existingNormal.state !== 'throw_offering_at_burner'
+          ) {
+            releaseSlotById(existingNormal.slotId);
+            existingNormal.slotId = null;
+            existingNormal.state = 'walk_in_up';
+          }
         }
 
         setPilgrims([...pilgrimsRef.current]);
@@ -2255,7 +2319,11 @@ export function useTempleEngine() {
     const tick = (now: number) => {
       const dt = Math.min(0.1, (now - lastTime) / 1000);
       lastTime = now;
-      const shouldCommitReactState = now - lastReactCommitTime >= 32;
+      const isCameraTracking =
+        cameraFocusRef.current.pilgrimId !== null ||
+        controlledTargetRef.current !== null;
+      const shouldCommitReactState =
+        isCameraTracking || now - lastReactCommitTime >= 15;
       if (shouldCommitReactState) {
         lastReactCommitTime = now;
       }
@@ -2480,8 +2548,9 @@ export function useTempleEngine() {
                 copy.state = 'throw_offering_at_burner';
                 copy.stateTimer = 0.55;
               } else {
+                // Thắp nhang (~0.83s) + bái lạy 1 cái (~0.64s) + đứng dậy (~0.18s) trước khi sang hành động kế tiếp
                 copy.state = 'ceremony_at_burner';
-                copy.stateTimer = 1.2;
+                copy.stateTimer = 1.65;
               }
             } else {
               copy.y += Math.sign(dy) * Math.min(Math.abs(dy), copy.speed * dt);
@@ -2493,8 +2562,9 @@ export function useTempleEngine() {
             copy.isCarryingGift = false;
             setLatestAltarOffering(copy.offeringType);
             spawnBurnerLotusBurst(cfg.incenseBurner.x, cfg.incenseBurner.y);
+            // Sau khi dâng lễ lên lư hương: thắp nhang + bái lạy 1 cái trước khi bắt đầu hành động kế tiếp
             copy.state = 'ceremony_at_burner';
-            copy.stateTimer = 1.0;
+            copy.stateTimer = 1.65;
           }
         } else if (copy.state === 'ceremony_at_burner') {
           copy.stateTimer -= dt;
@@ -2767,6 +2837,13 @@ export function useTempleEngine() {
           chosenBot.chatBubbleUntil =
             Date.now() + Math.max(2, cfg.chatBubbleDurationSec || 12) * 1000;
 
+          if (cfg.hudLayout.showNewPilgrimToast !== false) {
+            pushFloatingToast(
+              `🙏 ${chosenBot.username} thành tâm thắp nhang cầu an`,
+              chosenBot.isVip
+            );
+          }
+
           requestCameraFocus({
             pilgrimId: chosenBot.id,
             username: chosenBot.username,
@@ -2895,7 +2972,7 @@ export function useTempleEngine() {
       }
 
       pilgrimsRef.current = nextPilgrims;
-      if (shouldCommitReactState) {
+      if (shouldCommitReactState || cameraFocusRef.current.pilgrimId !== null) {
         setPilgrims(nextPilgrims);
       }
 
@@ -2944,6 +3021,7 @@ export function useTempleEngine() {
     createPilgrimInstance,
     pickRandomNpcName,
     pickRandomNpcPrayer,
+    pushFloatingToast,
     releaseSlotById,
     requestCameraFocus,
     requestSpawnPilgrim,
@@ -4278,13 +4356,19 @@ export function useTempleEngine() {
   const handleTriggerLike = useCallback(
     (count = 1, username?: string) => {
       syncService.sendCommand('TRIGGER_LIKE', { count, username });
+      const uname = (username || '').trim() || 'Phật tử';
+      pushFloatingToast(
+        `💗 ${uname} thả +${count} Hoa Sen Đại Lễ`,
+        false,
+        `like:${uname.toLowerCase()}`
+      );
       triggerHeadLotusBurst(
         username,
         count >= 50 ? 4 : count >= 10 ? 2 : 1,
         count
       );
     },
-    [triggerHeadLotusBurst]
+    [pushFloatingToast, triggerHeadLotusBurst]
   );
 
   const handleTriggerFollow = useCallback(

@@ -47,6 +47,14 @@ export interface DharmaArticleItem {
   content: string;
 }
 
+export interface GuideTaskItem {
+  id: string;
+  label: string;
+  shortDesc: string;
+  modelType?: OfferingGiftType | 'none';
+  colorTheme?: 'pink' | 'amber' | 'yellow' | 'emerald' | 'stone' | 'cyan';
+}
+
 export interface HudLayoutConfig {
   templeSign: HudBoxPosition;
   leaderboardBox: HudBoxPosition;
@@ -77,6 +85,14 @@ export interface HudLayoutConfig {
   showNewPilgrimToast?: boolean;
   leaderboardMaxRanks?: number;
   hudOpacity?: number;
+  noticeBoardOpacity?: number;
+  grandEventOpacity?: number;
+  leaderboardOpacity?: number;
+  guideOpacity?: number;
+  pilgrimCountOpacity?: number;
+  toastOpacity?: number;
+  templeSignOpacity?: number;
+  guideItems?: GuideTaskItem[];
   editLayoutMode: boolean;
 }
 
@@ -172,6 +188,8 @@ export interface GameConfig {
   cameraSpecialGiftLockSec: number;
   cameraZoomScale: number;
   cameraSmoothSpeed: number;
+  cameraFocusOffsetX: number;
+  cameraFocusOffsetY: number;
 
   characterScale: number;
   nameTagFontFamily: string;

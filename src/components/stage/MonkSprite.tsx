@@ -1,4 +1,5 @@
 import React from 'react';
+import { getCharacterDepthScale } from '../../config/constants';
 import { useProcessedSpriteFrames } from '../../services/spriteProcessor';
 import { MonkFrameIndex, TempleMonkData } from '../../types/game';
 
@@ -84,18 +85,19 @@ export const MonkSprite: React.FC<MonkSpriteProps> = React.memo(
     const isSide = frameIndex >= 4;
     const flipX = isSide && facingLeft ? -1 : 1;
 
-    // Khi ngồi gõ mõ tụng kinh (frame 6, 7), hạ thấp bong bóng chat xuống sát trên đầu
-    const isSittingChanting = frameIndex === 6 || frameIndex === 7;
-    const bubbleBottomPx = isSittingChanting ? 72 : 104;
-    const rippleBottomPx = bubbleBottomPx + 22;
-
-    // Khu vực tím hồng ở gần lư hương (y ≈ 480..560) -> tỉ lệ ~ 60% nhân với characterScale
-    const minY = 550;
-    const maxY = 950;
-    const t = Math.max(0, Math.min(1, (y - minY) / (maxY - minY)));
-    const depthScale = 0.6 + t * 0.4;
-    const roleFactor = role === 'junior_novice' ? 0.85 : 1.0;
+    // Đồng bộ khoảng cách phối cảnh chiều sâu với Phật tử và cân chỉnh tỉ lệ cơ thể Sư trụ trì / Chú tiểu lớn / Chú tiểu nhỏ
+    const depthScale = getCharacterDepthScale(y);
+    const roleFactor =
+      role === 'abbot' ? 0.8 : role === 'senior_novice' ? 0.7 : 0.6;
     const finalScale = depthScale * roleFactor * characterScale;
+
+    // Giữ kích thước bong bóng chat không bị thu nhỏ khi đi xa, nhưng neo vị trí đáy bong bóng sát đỉnh đầu thực tế (kể cả khi ngồi gõ mõ)
+    const isSittingChanting = frameIndex === 6 || frameIndex === 7;
+    const unscaledHeadTopPx = isSittingChanting ? 68.5 : 102;
+    const bubbleBottomPx = unscaledHeadTopPx * finalScale + 4;
+    const rippleBottomPx = bubbleBottomPx + 24;
+    const fixedBubbleScale = (chatBubbleScale * 0.86).toFixed(2);
+    const fixedNameScale = (nameTagScale * 0.86).toFixed(2);
 
     const nowMs = Date.now();
     const showChatBubble = Boolean(
@@ -107,37 +109,31 @@ export const MonkSprite: React.FC<MonkSpriteProps> = React.memo(
 
     return (
       <div
-        className="absolute w-[74px] h-[108px] origin-bottom pointer-events-none will-change-transform"
+        className="absolute top-0 left-0 w-[74px] h-[108px] pointer-events-none will-change-transform"
         style={{
-          left: `${x - 37}px`,
-          top: `${y - 102}px`,
-          transform: `scale(${finalScale.toFixed(3)})`,
+          transform: `translate3d(${(x - 37).toFixed(2)}px, ${(y - 102).toFixed(2)}px, 0)`,
           zIndex: Math.round(y),
         }}
       >
-        {/* Vòng sáng đánh dấu đang điều khiển bằng phím AWSD / Q */}
-        {isControlled && (
-          <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-4 rounded-full border-2 border-cyan-300 bg-cyan-400/25 shadow-[0_0_12px_#22d3ee] animate-pulse -z-10" />
-        )}
-
         {/* Nhịp Gõ Mõ (Phím Q) */}
         {showWoodenFishRipple && (
           <div
-            className="absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[9px] font-extrabold shadow-md whitespace-nowrap animate-bounce z-40 transition-[bottom] duration-200 ease-out"
-            style={{ bottom: `${rippleBottomPx}px` }}
+            className="absolute left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-amber-400 text-stone-950 text-[9px] font-extrabold shadow-md whitespace-nowrap animate-bounce z-40"
+            style={{ bottom: `${rippleBottomPx.toFixed(2)}px` }}
           >
             🪵 Cốc! Tụng kinh gõ mõ
           </div>
         )}
 
-        {/* Bong bóng chat trên đầu Trụ trì / Chú tiểu (Hạ thấp khi ngồi tụng kinh gõ mõ) */}
+        {/* Bong bóng chat trên đầu Trụ trì / Chú tiểu (Cố định sát trên đỉnh đầu theo chiều cao thực tế) */}
         {showChatBubble && (
           <div
-            className="absolute left-1/2 w-max max-w-[165px] px-2 py-1 rounded-lg bg-stone-950/95 border-2 border-yellow-400 text-yellow-300 text-[10px] font-semibold leading-tight text-center shadow-[0_0_10px_rgba(250,204,21,0.45)] break-words whitespace-normal z-30 origin-bottom transition-[bottom] duration-200 ease-out"
+            className="absolute left-1/2 w-max max-w-[165px] px-2 py-1 rounded-lg bg-stone-950/96 border-2 border-yellow-400 text-yellow-300 text-[10px] font-semibold leading-tight text-center shadow-[0_0_10px_rgba(250,204,21,0.45)] break-words whitespace-normal z-30 origin-bottom"
             style={{
-              bottom: `${bubbleBottomPx}px`,
+              bottom: `${bubbleBottomPx.toFixed(2)}px`,
               fontFamily: chatBubbleFontFamily,
-              transform: `translateX(-50%) scale(${chatBubbleScale.toFixed(2)})`,
+              transform: `translate3d(-50%, 0, 0) scale(${fixedBubbleScale})`,
+              backfaceVisibility: 'hidden',
             }}
           >
             {chatText}
@@ -145,30 +141,43 @@ export const MonkSprite: React.FC<MonkSpriteProps> = React.memo(
         )}
 
         <div
-          className="w-full h-full flex items-end justify-center"
-          style={{ transform: `scaleX(${flipX})` }}
+          className="relative w-full h-full origin-bottom pointer-events-none"
+          style={{
+            transform: `scale(${finalScale.toFixed(3)})`,
+          }}
         >
-          {processedFrames && processedFrames[frameIndex] ? (
-            <img
-              src={processedFrames[frameIndex]}
-              alt=""
-              className="w-full h-full object-contain"
-            />
-          ) : null}
+          {/* Vòng sáng đánh dấu đang điều khiển bằng phím AWSD / Q */}
+          {isControlled && (
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-12 h-4 rounded-full border-2 border-cyan-300 bg-cyan-400/25 shadow-[0_0_12px_#22d3ee] animate-pulse -z-10" />
+          )}
+
+          <div
+            className="w-full h-full flex items-end justify-center"
+            style={{ transform: `scaleX(${flipX})` }}
+          >
+            {processedFrames && processedFrames[frameIndex] ? (
+              <img
+                src={processedFrames[frameIndex]}
+                alt=""
+                className="w-full h-full object-contain"
+              />
+            ) : null}
+          </div>
         </div>
 
         {/* Thẻ tên Trụ trì / Chú tiểu lớn / Chú tiểu nhỏ */}
         <div
           className={`absolute -bottom-[12px] left-1/2 px-1.5 py-0.5 rounded text-[9px] font-bold whitespace-nowrap shadow border origin-top ${
             isAbbot
-              ? 'bg-amber-950/90 border-amber-400 text-amber-200'
+              ? 'bg-amber-950/95 border-amber-400 text-amber-200'
               : role === 'senior_novice'
-              ? 'bg-stone-900/90 border-amber-500/50 text-amber-100'
-              : 'bg-stone-900/90 border-stone-600 text-stone-200'
+              ? 'bg-stone-900/95 border-amber-500/50 text-amber-100'
+              : 'bg-stone-900/95 border-stone-600 text-stone-200'
           }`}
           style={{
             fontFamily: nameTagFontFamily,
-            transform: `translateX(-50%) scale(${nameTagScale.toFixed(2)})`,
+            transform: `translate3d(-50%, 0, 0) scale(${fixedNameScale})`,
+            backfaceVisibility: 'hidden',
           }}
         >
           {name}

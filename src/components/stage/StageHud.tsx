@@ -1,12 +1,14 @@
 import React from 'react';
-import { BellRing, Move, Users } from 'lucide-react';
+import { BellRing, Gift, Move, Users } from 'lucide-react';
 import {
   CustomAssetsConfig,
   DonorEntry,
   FloatingToastItem,
+  GuideTaskItem,
   HudLayoutConfig,
   OfferingGiftType,
 } from '../../types/game';
+import { DEFAULT_GUIDE_ITEMS } from '../../config/constants';
 import { OfferingModelArt } from './OfferingModelArt';
 
 export type HudBoxKey =
@@ -91,87 +93,91 @@ const CornerResizeHandles: React.FC<CornerHandlesProps> = ({
   );
 };
 
-/**
- * Danh sách công việc trên Bảng Hướng Dẫn (ghi ngắn gọn theo yêu cầu):
- * - Hoa hồng (1 xu): Dâng sen hồng
- * - Bắn tim (5 xu): Dâng sen vàng
- * - Rosa (10 xu): Dâng mâm quả
- * - Đặc biệt (>10 xu): Mâm quả + Hào quang
- * - Thả tim: +1 hoa sen
- * - Follow: +100 hoa sen
- * - Bình luận: Ước nguyện
- */
-const GUIDE_TASKS: Array<{
-  id: string;
-  modelType?: OfferingGiftType;
-  label: string;
-  shortDesc: string;
-  borderClass: string;
+function clampOpacity(val: number | undefined, fallback: number): number {
+  if (typeof val !== 'number' || Number.isNaN(val)) return fallback;
+  return Math.max(0, Math.min(1, val));
+}
+
+function buildBoxSurfaceStyle(
+  op: number,
+  borderRgb = '251, 191, 36',
+  borderMaxAlpha = 0.65,
+  bgRgb = '12, 10, 9'
+): React.CSSProperties {
+  if (op <= 0.005) {
+    return {
+      backgroundColor: 'transparent',
+      borderColor: 'transparent',
+      boxShadow: 'none',
+      backdropFilter: 'none',
+      textShadow: '0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85)',
+    };
+  }
+  const bAlpha = (borderMaxAlpha * op).toFixed(2);
+  const sAlpha = (0.55 * op).toFixed(2);
+  return {
+    backgroundColor: `rgba(${bgRgb}, ${op.toFixed(2)})`,
+    borderColor: `rgba(${borderRgb}, ${bAlpha})`,
+    boxShadow: `0 10px 25px -5px rgba(0, 0, 0, ${sAlpha})`,
+    backdropFilter: op >= 0.15 ? `blur(${Math.round(op * 8)}px)` : 'none',
+    textShadow: op < 0.45 ? '0 1px 3px rgba(0,0,0,0.95)' : undefined,
+  };
+}
+
+function getGuideTaskColorClasses(item: GuideTaskItem): {
+  borderRgb: string;
   labelClass: string;
   descClass: string;
-}> = [
-  {
-    id: 'rose',
-    modelType: 'rose',
-    label: 'Hoa hồng',
-    shortDesc: 'Dâng sen hồng',
-    borderClass: 'border-pink-400/35',
-    labelClass: 'text-pink-300',
-    descClass: 'text-stone-200',
-  },
-  {
-    id: 'lotus',
-    modelType: 'lotus',
-    label: 'Bắn tim',
-    shortDesc: 'Dâng sen vàng',
-    borderClass: 'border-amber-400/40',
-    labelClass: 'text-amber-300',
-    descClass: 'text-stone-200',
-  },
-  {
-    id: 'tray',
-    modelType: 'tray',
-    label: 'Rosa',
-    shortDesc: 'Dâng mâm quả',
-    borderClass: 'border-amber-500/50',
-    labelClass: 'text-amber-300',
-    descClass: 'text-amber-100',
-  },
-  {
-    id: 'special_tray',
-    modelType: 'special_tray',
-    label: 'Đặc biệt',
-    shortDesc: 'Hào quang + Zoom',
-    borderClass: 'border-yellow-300/75',
-    labelClass: 'text-yellow-300',
-    descClass: 'text-yellow-100 font-semibold',
-  },
-  {
-    id: 'like',
-    label: 'Thả tim',
-    shortDesc: '+1 hoa sen',
-    borderClass: 'border-pink-500/30',
-    labelClass: 'text-pink-300',
-    descClass: 'text-pink-200',
-  },
-  {
-    id: 'follow',
-    label: 'Follow',
-    shortDesc: '+100 hoa sen',
-    borderClass: 'border-emerald-500/35',
-    labelClass: 'text-emerald-300',
-    descClass: 'text-emerald-200',
-  },
-  {
-    id: 'comment',
-    modelType: 'incense',
-    label: 'Bình luận',
-    shortDesc: 'Ước nguyện',
-    borderClass: 'border-stone-700',
-    labelClass: 'text-amber-200',
-    descClass: 'text-stone-300',
-  },
-];
+} {
+  const theme =
+    item.colorTheme ||
+    (item.modelType === 'rose'
+      ? 'pink'
+      : item.modelType === 'lotus' || item.modelType === 'tray'
+      ? 'amber'
+      : item.modelType === 'special_tray'
+      ? 'yellow'
+      : 'stone');
+
+  switch (theme) {
+    case 'pink':
+      return {
+        borderRgb: '244, 114, 182',
+        labelClass: 'text-pink-300',
+        descClass: 'text-stone-100',
+      };
+    case 'amber':
+      return {
+        borderRgb: '251, 191, 36',
+        labelClass: 'text-amber-300',
+        descClass: 'text-amber-100',
+      };
+    case 'yellow':
+      return {
+        borderRgb: '253, 224, 71',
+        labelClass: 'text-yellow-300',
+        descClass: 'text-yellow-100 font-semibold',
+      };
+    case 'emerald':
+      return {
+        borderRgb: '52, 211, 153',
+        labelClass: 'text-emerald-300',
+        descClass: 'text-emerald-200',
+      };
+    case 'cyan':
+      return {
+        borderRgb: '34, 211, 238',
+        labelClass: 'text-cyan-300',
+        descClass: 'text-cyan-100',
+      };
+    default:
+      return {
+        borderRgb: '168, 162, 158',
+        labelClass: 'text-amber-200',
+        descClass: 'text-stone-200',
+      };
+  }
+}
 
 export const StageHud: React.FC<StageHudProps> = ({
   hudLayout,
@@ -216,6 +222,14 @@ export const StageHud: React.FC<StageHudProps> = ({
     showToastBox = true,
     leaderboardMaxRanks = 5,
     hudOpacity = 0.88,
+    noticeBoardOpacity,
+    grandEventOpacity,
+    leaderboardOpacity,
+    guideOpacity,
+    pilgrimCountOpacity,
+    toastOpacity,
+    templeSignOpacity,
+    guideItems,
     editLayoutMode,
   } = hudLayout;
 
@@ -227,9 +241,19 @@ export const StageHud: React.FC<StageHudProps> = ({
   const safeToastFontSize = Math.max(7, Math.min(24, toastFontSize || 10));
   const safeLeaderboardMaxRanks = Math.max(1, Math.min(20, leaderboardMaxRanks || 5));
 
-  const safeOpacity = Math.max(0.05, Math.min(1, hudOpacity));
-  const boardBgStyle = `rgba(12, 10, 9, ${safeOpacity.toFixed(2)})`;
-  const innerItemBgStyle = `rgba(28, 25, 23, ${Math.min(1, safeOpacity + 0.05).toFixed(2)})`;
+  // Cho phép chỉnh độ mờ nền của từng bảng riêng biệt từ 0% (mất nền hoàn toàn) đến 100%
+  const defaultOp = clampOpacity(hudOpacity, 0.88);
+  const opNotice = clampOpacity(noticeBoardOpacity, defaultOp);
+  const opGrandEvent = clampOpacity(grandEventOpacity, defaultOp);
+  const opLeaderboard = clampOpacity(leaderboardOpacity, defaultOp);
+  const opGuide = clampOpacity(guideOpacity, defaultOp);
+  const opPilgrimCount = clampOpacity(pilgrimCountOpacity, defaultOp);
+  const opToast = clampOpacity(toastOpacity, defaultOp);
+  const opTempleSign = clampOpacity(templeSignOpacity, 1);
+
+  const activeGuideItems = Array.isArray(guideItems)
+    ? guideItems
+    : DEFAULT_GUIDE_ITEMS;
 
   const topDonors = [...donors]
     .sort((a, b) => b.coins - a.coins)
@@ -270,6 +294,7 @@ export const StageHud: React.FC<StageHudProps> = ({
             top: `${templeSign.y}px`,
             width: `${templeSign.width}px`,
             height: `${templeSign.height}px`,
+            opacity: opTempleSign,
           }}
         >
           {customAssets.templeSignPngUrl ? (
@@ -341,25 +366,30 @@ export const StageHud: React.FC<StageHudProps> = ({
         <div
           onMouseDown={(e) => editLayoutMode && onStartDragHudBox('grandEventBox', e)}
           onTouchStart={(e) => editLayoutMode && onStartDragHudBox('grandEventBox', e)}
-          className={`absolute rounded-lg px-2.5 py-1.5 shadow-xl backdrop-blur-md flex flex-col justify-between transition-colors ${
-            isGrandEventActive
-              ? 'border-2 border-yellow-300 shadow-[0_0_20px_rgba(250,204,21,0.65)]'
-              : 'border border-pink-400/65'
-          } ${dragringClass}`}
+          className={`absolute rounded-lg px-2.5 py-1.5 border flex flex-col justify-between transition-colors ${dragringClass}`}
           style={{
             left: `${grandEventBox.x}px`,
             top: `${grandEventBox.y}px`,
             width: `${grandEventBox.width}px`,
             height: `${grandEventBox.height}px`,
-            backgroundColor: isGrandEventActive
-              ? `rgba(69, 26, 3, ${Math.min(1, safeOpacity + 0.08).toFixed(2)})`
-              : boardBgStyle,
+            ...buildBoxSurfaceStyle(
+              opGrandEvent,
+              isGrandEventActive ? '253, 224, 71' : '244, 114, 182',
+              isGrandEventActive ? 0.95 : 0.65,
+              isGrandEventActive ? '69, 26, 3' : '12, 10, 9'
+            ),
           }}
         >
           {/* Tiêu đề & số đếm Hoa Sen */}
           <div
-            className="flex items-center justify-between gap-1 border-b border-pink-400/25 pb-0.5"
-            style={{ fontSize: `${safeGrandEventFontSize}px` }}
+            className="flex items-center justify-between gap-1 pb-0.5"
+            style={{
+              fontSize: `${safeGrandEventFontSize}px`,
+              borderBottom:
+                opGrandEvent > 0.05
+                  ? `1px solid rgba(244, 114, 182, ${(0.28 * opGrandEvent).toFixed(2)})`
+                  : '1px solid transparent',
+            }}
           >
             <span className="font-extrabold tracking-wide text-pink-200 truncate">
               {grandEventTitle || 'Sự kiện Đại Lễ'}
@@ -414,7 +444,7 @@ export const StageHud: React.FC<StageHudProps> = ({
             <div className="flex-1 flex flex-col gap-0.5 min-w-0">
               <div
                 key={eventBarFlashKey || 0}
-                className={`w-full h-2.5 rounded-full bg-stone-900 border border-pink-400/45 overflow-hidden p-0.5 ${
+                className={`w-full h-2.5 rounded-full bg-stone-900/90 border border-pink-400/45 overflow-hidden p-0.5 ${
                   eventBarFlashKey ? 'event-bar-pink-flash' : ''
                 }`}
               >
@@ -458,14 +488,14 @@ export const StageHud: React.FC<StageHudProps> = ({
         <div
           onMouseDown={(e) => editLayoutMode && onStartDragHudBox('pilgrimCountBox', e)}
           onTouchStart={(e) => editLayoutMode && onStartDragHudBox('pilgrimCountBox', e)}
-          className={`absolute rounded-lg border border-amber-400/60 px-2.5 py-1 shadow-xl backdrop-blur-md flex items-center justify-between gap-2 ${dragringClass}`}
+          className={`absolute rounded-lg border px-2.5 py-1 flex items-center justify-between gap-2 ${dragringClass}`}
           style={{
             left: `${safePilgrimBox.x}px`,
             top: `${safePilgrimBox.y}px`,
             width: `${safePilgrimBox.width}px`,
             height: `${safePilgrimBox.height}px`,
-            backgroundColor: boardBgStyle,
             fontSize: `${safePilgrimCountFontSize}px`,
+            ...buildBoxSurfaceStyle(opPilgrimCount),
           }}
         >
           <div className="flex items-center gap-1.5 min-w-0">
@@ -495,23 +525,29 @@ export const StageHud: React.FC<StageHudProps> = ({
         </div>
       )}
 
-      {/* 4. BẢNG THÔNG BÁO CỐ ĐỊNH (Cho phép chỉnh sửa nội dung, size chữ, vị trí & kích thước) */}
+      {/* 4. BẢNG THÔNG BÁO CỐ ĐỊNH (Cho phép chỉnh sửa nội dung, size chữ, độ mờ nền 0%->100%, vị trí & kích thước) */}
       {showNoticeBoardBox && (
         <div
           onMouseDown={(e) => editLayoutMode && onStartDragHudBox('noticeBoardBox', e)}
           onTouchStart={(e) => editLayoutMode && onStartDragHudBox('noticeBoardBox', e)}
-          className={`absolute rounded-lg border border-amber-400/65 px-2.5 py-1.5 shadow-xl backdrop-blur-md flex flex-col ${dragringClass}`}
+          className={`absolute rounded-lg border px-2.5 py-1.5 flex flex-col ${dragringClass}`}
           style={{
             left: `${safeNoticeBoardBox.x}px`,
             top: `${safeNoticeBoardBox.y}px`,
             width: `${safeNoticeBoardBox.width}px`,
             height: `${safeNoticeBoardBox.height}px`,
-            backgroundColor: boardBgStyle,
+            ...buildBoxSurfaceStyle(opNotice),
           }}
         >
           <div
-            className="flex items-center gap-1 border-b border-amber-500/30 pb-0.5 mb-1 shrink-0"
-            style={{ fontSize: `${safeNoticeFontSize}px` }}
+            className="flex items-center gap-1 pb-0.5 mb-1 shrink-0"
+            style={{
+              fontSize: `${safeNoticeFontSize}px`,
+              borderBottom:
+                opNotice > 0.05
+                  ? `1px solid rgba(245, 158, 11, ${(0.3 * opNotice).toFixed(2)})`
+                  : '1px solid transparent',
+            }}
           >
             <BellRing className="w-3 h-3 text-amber-400 shrink-0" />
             <span className="font-extrabold tracking-wide text-amber-300 truncate">
@@ -546,16 +582,24 @@ export const StageHud: React.FC<StageHudProps> = ({
         <div
           onMouseDown={(e) => editLayoutMode && onStartDragHudBox('leaderboardBox', e)}
           onTouchStart={(e) => editLayoutMode && onStartDragHudBox('leaderboardBox', e)}
-          className={`absolute rounded-lg border border-amber-400/60 px-2 py-1.5 shadow-xl backdrop-blur-md flex flex-col justify-between ${dragringClass}`}
+          className={`absolute rounded-lg border px-2 py-1.5 flex flex-col justify-between ${dragringClass}`}
           style={{
             left: `${leaderboardBox.x}px`,
             top: `${leaderboardBox.y}px`,
             width: `${leaderboardBox.width}px`,
             height: `${leaderboardBox.height}px`,
-            backgroundColor: boardBgStyle,
+            ...buildBoxSurfaceStyle(opLeaderboard),
           }}
         >
-          <div className="text-center border-b border-amber-500/30 pb-0.5 mb-1 shrink-0">
+          <div
+            className="text-center pb-0.5 mb-1 shrink-0"
+            style={{
+              borderBottom:
+                opLeaderboard > 0.05
+                  ? `1px solid rgba(245, 158, 11, ${(0.3 * opLeaderboard).toFixed(2)})`
+                  : '1px solid transparent',
+            }}
+          >
             <div
               className="font-extrabold tracking-wide text-amber-300 truncate"
               style={{ fontSize: `${safeLeaderboardFontSize}px` }}
@@ -603,21 +647,29 @@ export const StageHud: React.FC<StageHudProps> = ({
         </div>
       )}
 
-      {/* 6. HÌNH TRẮNG DƯỚI: Bảng hướng dẫn (Ghi ngắn gọn + Model quà dâng lên nằm bên trái phía ngoài) */}
+      {/* 6. HÌNH TRẮNG DƯỚI: Bảng hướng dẫn (Cho phép thêm/bớt dòng + chỉnh độ mờ nền đến 0% mất nền) */}
       {showGuideBox && (
         <div
           onMouseDown={(e) => editLayoutMode && onStartDragHudBox('guideBox', e)}
           onTouchStart={(e) => editLayoutMode && onStartDragHudBox('guideBox', e)}
-          className={`absolute rounded-lg border border-amber-400/60 p-1.5 shadow-xl backdrop-blur-md flex flex-col justify-between overflow-visible ${dragringClass}`}
+          className={`absolute rounded-lg border p-1.5 flex flex-col justify-between overflow-visible ${dragringClass}`}
           style={{
             left: `${guideBox.x}px`,
             top: `${guideBox.y}px`,
             width: `${guideBox.width}px`,
             height: `${guideBox.height}px`,
-            backgroundColor: boardBgStyle,
+            ...buildBoxSurfaceStyle(opGuide),
           }}
         >
-          <div className="text-center border-b border-amber-500/30 pb-0.5 mb-1 shrink-0">
+          <div
+            className="text-center pb-0.5 mb-1 shrink-0"
+            style={{
+              borderBottom:
+                opGuide > 0.05
+                  ? `1px solid rgba(245, 158, 11, ${(0.3 * opGuide).toFixed(2)})`
+                  : '1px solid transparent',
+            }}
+          >
             <div
               className="font-extrabold tracking-wide text-amber-300 truncate"
               style={{ fontSize: `${safeGuideFontSize + 1}px` }}
@@ -627,43 +679,81 @@ export const StageHud: React.FC<StageHudProps> = ({
           </div>
 
           <div
-            className="flex-1 flex flex-col justify-between gap-0.5 leading-tight text-stone-200"
+            className="flex-1 flex flex-col justify-between gap-0.5 leading-tight text-stone-200 overflow-hidden"
             style={{ fontSize: `${safeGuideFontSize}px` }}
           >
-            {GUIDE_TASKS.map((task) => (
-              <div
-                key={task.id}
-                className={`relative px-1.5 py-0.5 rounded border ${task.borderClass} flex items-center justify-between gap-1`}
-                style={{ backgroundColor: innerItemBgStyle }}
-              >
-                {/* Ảnh hiển thị của quà dâng lên nằm bên trái phía ngoài tương ứng theo thẻ công việc */}
-                {task.modelType && (
-                  <div
-                    title={`Model lễ vật: ${task.label} - ${task.shortDesc}`}
-                    className="
-                      absolute -left-7 top-1/2 -translate-y-1/2
-                      w-5 h-5 rounded-md border border-amber-400/65
-                      shadow-[0_2px_6px_rgba(0,0,0,0.85)]
-                      flex items-center justify-center pointer-events-none
-                    "
-                    style={{ backgroundColor: boardBgStyle }}
-                  >
-                    <OfferingModelArt
-                      type={task.modelType}
-                      customAssets={customAssets}
-                      className="w-4 h-4"
-                    />
-                  </div>
-                )}
+            {activeGuideItems.length > 0 ? (
+              activeGuideItems.map((task) => {
+                const { borderRgb, labelClass, descClass } =
+                  getGuideTaskColorClasses(task);
+                const hasModel =
+                  Boolean(task.modelType) && task.modelType !== 'none';
+                const rowBg =
+                  opGuide <= 0.005
+                    ? 'transparent'
+                    : `rgba(28, 25, 23, ${Math.min(1, opGuide * 0.92).toFixed(2)})`;
+                const rowBorder =
+                  opGuide <= 0.005
+                    ? 'transparent'
+                    : `rgba(${borderRgb}, ${(0.45 * opGuide).toFixed(2)})`;
+                const badgeBg =
+                  opGuide <= 0.005
+                    ? 'transparent'
+                    : `rgba(12, 10, 9, ${opGuide.toFixed(2)})`;
+                const badgeBorder =
+                  opGuide <= 0.005
+                    ? 'transparent'
+                    : `rgba(251, 191, 36, ${(0.65 * opGuide).toFixed(2)})`;
 
-                <span className={`font-bold shrink-0 ${task.labelClass}`}>
-                  {task.label}:
-                </span>
-                <span className={`truncate text-right ${task.descClass}`}>
-                  {task.shortDesc}
-                </span>
+                return (
+                  <div
+                    key={task.id}
+                    className="relative px-1.5 py-0.5 rounded border flex items-center justify-between gap-1"
+                    style={{
+                      backgroundColor: rowBg,
+                      borderColor: rowBorder,
+                    }}
+                  >
+                    {/* Ảnh hiển thị của quà dâng lên nằm bên trái phía ngoài tương ứng theo thẻ công việc */}
+                    {hasModel && (
+                      <div
+                        title={`Model lễ vật: ${task.label} - ${task.shortDesc}`}
+                        className="
+                          absolute -left-7 top-1/2 -translate-y-1/2
+                          w-5 h-5 rounded-md border
+                          flex items-center justify-center pointer-events-none
+                        "
+                        style={{
+                          backgroundColor: badgeBg,
+                          borderColor: badgeBorder,
+                          boxShadow:
+                            opGuide > 0.05
+                              ? `0 2px 6px rgba(0,0,0,${(0.85 * opGuide).toFixed(2)})`
+                              : 'none',
+                        }}
+                      >
+                        <OfferingModelArt
+                          type={task.modelType as OfferingGiftType}
+                          customAssets={customAssets}
+                          className="w-4 h-4"
+                        />
+                      </div>
+                    )}
+
+                    <span className={`font-bold shrink-0 ${labelClass}`}>
+                      {task.label ? `${task.label}:` : ''}
+                    </span>
+                    <span className={`truncate text-right ${descClass}`}>
+                      {task.shortDesc}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <div className="my-auto text-center text-stone-400 italic">
+                Chưa có dòng hướng dẫn
               </div>
-            ))}
+            )}
           </div>
 
           {editLayoutMode && (
@@ -680,55 +770,80 @@ export const StageHud: React.FC<StageHudProps> = ({
         </div>
       )}
 
-      {/* 7. HÌNH ĐEN BÊN TRÁI: Bảng thông báo sự kiện trôi lên rồi mờ biến mất */}
+      {/* 7. BẢNG TOAST DÂNG LỄ & THÔNG BÁO SỰ KIỆN (Tự động giãn chiều cao khi quá 2 dòng hoặc nhiều thông báo để không bao giờ bị ẩn/cắt chữ) */}
       {showToastBox && (
         <div
           onMouseDown={(e) => editLayoutMode && onStartDragHudBox('toastBox', e)}
           onTouchStart={(e) => editLayoutMode && onStartDragHudBox('toastBox', e)}
-          className={`absolute flex flex-col justify-end ${dragringClass}`}
+          className={`absolute rounded-lg border px-2 py-1.5 flex flex-col justify-start ${dragringClass}`}
           style={{
             left: `${toastBox.x}px`,
             top: `${toastBox.y}px`,
             width: `${toastBox.width}px`,
-            height: `${toastBox.height}px`,
+            minHeight: `${toastBox.height}px`,
+            height: 'auto',
+            ...buildBoxSurfaceStyle(opToast),
           }}
         >
+          {/* Danh sách thông báo dâng lễ / sự kiện mới nhất (Hiển thị đầy đủ mọi dòng, không cắt line-clamp) */}
+          <div className="w-full flex flex-col justify-start gap-1.5 pointer-events-none">
+            {floatingToasts.length > 0 ? (
+              floatingToasts.slice(-3).map((item) => {
+                const itemBg =
+                  opToast <= 0.005
+                    ? 'transparent'
+                    : item.isVip
+                    ? `rgba(69, 26, 3, ${Math.min(1, opToast + 0.06).toFixed(2)})`
+                    : `rgba(28, 25, 23, ${Math.min(1, opToast).toFixed(2)})`;
+                const itemBorder =
+                  opToast <= 0.005
+                    ? 'transparent'
+                    : item.isVip
+                    ? `rgba(250, 204, 21, ${(0.85 * opToast).toFixed(2)})`
+                    : `rgba(120, 113, 108, ${(0.5 * opToast).toFixed(2)})`;
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`toast-float-up w-full px-2 py-1 rounded-md font-semibold border leading-snug break-words whitespace-normal ${
+                      item.isVip ? 'text-yellow-200' : 'text-stone-100'
+                    }`}
+                    style={{
+                      fontSize: `${safeToastFontSize}px`,
+                      backgroundColor: itemBg,
+                      borderColor: itemBorder,
+                      textShadow:
+                        opToast < 0.45
+                          ? '0 1px 3px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.85)'
+                          : undefined,
+                    }}
+                  >
+                    {item.text}
+                  </div>
+                );
+              })
+            ) : opToast > 0.02 || editLayoutMode ? (
+              <div
+                className="flex items-center gap-1.5 text-amber-200/80 italic leading-snug break-words whitespace-normal my-auto"
+                style={{ fontSize: `${Math.max(8, safeToastFontSize - 0.5)}px` }}
+              >
+                <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span>Đón nhận lễ vật & lời cầu an...</span>
+              </div>
+            ) : null}
+          </div>
+
           {editLayoutMode && (
             <>
               <CornerResizeHandles
                 boxKey="toastBox"
                 onStartResizeHudBox={onStartResizeHudBox}
               />
-              <div
-                className="w-full h-full rounded-lg border border-dashed border-amber-400 flex items-center justify-center text-[9.5px] font-bold text-amber-300 px-1 text-center"
-                style={{ backgroundColor: boardBgStyle }}
-              >
-                <Move className="w-3 h-3 mr-1 shrink-0" /> Thông báo trôi ({toastBox.width}×{toastBox.height})
-              </div>
+              <span className="absolute -top-5 left-0 px-1.5 py-0.5 rounded bg-amber-400 text-stone-950 text-[9px] font-bold flex items-center gap-0.5 whitespace-nowrap shadow">
+                <Move className="w-2.5 h-2.5" /> Toast Dâng Lễ ({toastBox.width}×{toastBox.height})
+              </span>
             </>
           )}
-
-          {/* Các dòng thông báo trôi lên trên rồi mờ dần biến mất */}
-          <div className="relative w-full h-full pointer-events-none">
-            {floatingToasts.map((item) => (
-              <div
-                key={item.id}
-                className={`toast-float-up absolute left-0 right-0 bottom-0 px-2.5 py-1.5 rounded-lg font-semibold shadow-lg border backdrop-blur-xs truncate ${
-                  item.isVip
-                    ? 'border-yellow-400 text-yellow-200'
-                    : 'border-stone-700 text-stone-100'
-                }`}
-                style={{
-                  fontSize: `${safeToastFontSize}px`,
-                  backgroundColor: item.isVip
-                    ? `rgba(69, 26, 3, ${safeOpacity.toFixed(2)})`
-                    : boardBgStyle,
-                }}
-              >
-                {item.text}
-              </div>
-            ))}
-          </div>
         </div>
       )}
     </div>

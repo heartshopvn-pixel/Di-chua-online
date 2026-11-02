@@ -12,16 +12,18 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
+  Trash2,
   Upload,
 } from 'lucide-react';
 import {
   CustomAssetsConfig,
   GameConfig,
   GridConfig,
+  GuideTaskItem,
   HudLayoutConfig,
   KneelSlot,
 } from '../../types/game';
-import { FONT_FAMILY_OPTIONS } from '../../config/constants';
+import { DEFAULT_GUIDE_ITEMS, FONT_FAMILY_OPTIONS } from '../../config/constants';
 import { OfferingModelArt } from '../stage/OfferingModelArt';
 
 interface TabMapEditorProps {
@@ -509,137 +511,195 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
         <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800 space-y-2">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-semibold text-stone-200">
-              Ẩn / Hiện & Cỡ chữ (Font Size) từng loại bảng trên màn hình Live
+              Ẩn / Hiện, Cỡ chữ & Độ mờ nền riêng từng bảng (0% = Mất nền)
             </span>
-            <span className="text-[10px] text-stone-400">7px – 24px</span>
+            <span className="text-[10px] text-amber-300 font-mono">0% – 100%</span>
           </div>
-          <div className="grid grid-cols-1 gap-1.5">
+          <div className="grid grid-cols-1 gap-2">
             {(
               [
                 {
                   visKey: 'showNoticeBoardBox',
                   fontKey: 'noticeBoardFontSize',
+                  opKey: 'noticeBoardOpacity',
                   defaultFont: 10,
+                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
                   label: 'Bảng Thông Báo',
                 },
                 {
                   visKey: 'showGrandEventBox',
                   fontKey: 'grandEventFontSize',
+                  opKey: 'grandEventOpacity',
                   defaultFont: 10,
+                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
                   label: 'Bảng Sự Kiện Đại Lễ',
                 },
                 {
                   visKey: 'showLeaderboardBox',
                   fontKey: 'leaderboardFontSize',
+                  opKey: 'leaderboardOpacity',
                   defaultFont: 10,
+                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
                   label: 'Bảng Công Đức (BXH)',
                 },
                 {
                   visKey: 'showGuideBox',
                   fontKey: 'guideFontSize',
+                  opKey: 'guideOpacity',
                   defaultFont: 9,
+                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
                   label: 'Bảng Hướng Dẫn',
                 },
                 {
                   visKey: 'showPilgrimCountBox',
                   fontKey: 'pilgrimCountFontSize',
+                  opKey: 'pilgrimCountOpacity',
                   defaultFont: 10,
+                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
                   label: 'Bảng Đếm Phật Tử',
                 },
                 {
                   visKey: 'showToastBox',
                   fontKey: 'toastFontSize',
+                  opKey: 'toastOpacity',
                   defaultFont: 10,
+                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
                   label: 'Bảng Toast Dâng Lễ',
                 },
                 {
                   visKey: 'showTempleSign',
                   fontKey: null,
+                  opKey: 'templeSignOpacity',
                   defaultFont: 10,
+                  defaultOp: 1,
                   label: 'Bảng Tên Chùa (PNG)',
                 },
               ] as const
-            ).map(({ visKey, fontKey, defaultFont, label }) => {
+            ).map(({ visKey, fontKey, opKey, defaultFont, defaultOp, label }) => {
               const visible = config.hudLayout[visKey] !== false;
               const currentSize = fontKey
                 ? (config.hudLayout[fontKey] ?? defaultFont)
                 : defaultFont;
+              const curOp =
+                typeof config.hudLayout[opKey] === 'number'
+                  ? (config.hudLayout[opKey] as number)
+                  : defaultOp;
+              const opPercent = Math.round(curOp * 100);
 
               return (
                 <div
                   key={visKey}
-                  className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-2 transition ${
+                  className={`px-2.5 py-2 rounded-lg border space-y-1.5 transition ${
                     visible
                       ? 'bg-stone-950/85 border-emerald-500/35'
                       : 'bg-stone-950/40 border-stone-800/80 opacity-65'
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => onUpdateHudLayout({ [visKey]: !visible })}
-                    className={`px-2 py-1 rounded-md border text-[10.5px] font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
-                      visible
-                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
-                        : 'bg-stone-900 border-stone-700 text-stone-400'
-                    }`}
-                  >
-                    <span className="text-[9.5px] font-mono px-1 py-0.2 rounded bg-stone-950/80">
-                      {visible ? 'HIỆN' : 'ẨN'}
-                    </span>
-                    <span className="truncate">{label}</span>
-                  </button>
-
-                  {fontKey ? (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-stone-400 whitespace-nowrap">
-                        Cỡ chữ:
+                  <div className="flex items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateHudLayout({ [visKey]: !visible })}
+                      className={`px-2 py-1 rounded-md border text-[10.5px] font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                        visible
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+                          : 'bg-stone-900 border-stone-700 text-stone-400'
+                      }`}
+                    >
+                      <span className="text-[9.5px] font-mono px-1 py-0.2 rounded bg-stone-950/80">
+                        {visible ? 'HIỆN' : 'ẨN'}
                       </span>
+                      <span className="truncate">{label}</span>
+                    </button>
+
+                    {fontKey ? (
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] text-stone-400 whitespace-nowrap">
+                          Cỡ chữ:
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateHudLayout({
+                              [fontKey]: Math.max(7, currentSize - 1),
+                            })
+                          }
+                          className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer"
+                          title="Giảm cỡ chữ (-1px)"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <input
+                          type="range"
+                          min={7}
+                          max={24}
+                          step={1}
+                          value={currentSize}
+                          onChange={(e) =>
+                            onUpdateHudLayout({
+                              [fontKey]: parseInt(e.target.value, 10) || defaultFont,
+                            })
+                          }
+                          className="w-16 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onUpdateHudLayout({
+                              [fontKey]: Math.min(24, currentSize + 1),
+                            })
+                          }
+                          className="w-5 h-5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer"
+                          title="Tăng cỡ chữ (+1px)"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <span className="w-8 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
+                          {currentSize}px
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] text-stone-500 italic">
+                        Ảnh PNG (Kéo góc chỉnh cỡ)
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Thanh chỉnh độ mờ nền riêng của bảng (0% mất nền -> 100%) */}
+                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-800/70">
+                    <span className="text-[10px] text-stone-400">
+                      Độ mờ nền ({opPercent === 0 ? 'Mất nền' : `${opPercent}%`}):
+                    </span>
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() =>
-                          onUpdateHudLayout({
-                            [fontKey]: Math.max(7, currentSize - 1),
-                          })
-                        }
-                        className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer"
-                        title="Giảm cỡ chữ (-1px)"
+                        onClick={() => onUpdateHudLayout({ [opKey]: 0 })}
+                        className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono cursor-pointer transition ${
+                          opPercent === 0
+                            ? 'bg-amber-400 text-stone-950 font-bold'
+                            : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                        }`}
+                        title="Chỉnh độ mờ nền về 0% (Mất nền hoàn toàn)"
                       >
-                        <Minus className="w-3 h-3" />
+                        0% (Mất nền)
                       </button>
                       <input
                         type="range"
-                        min={7}
-                        max={24}
-                        step={1}
-                        value={currentSize}
+                        min={0}
+                        max={1}
+                        step={0.02}
+                        value={curOp}
                         onChange={(e) =>
                           onUpdateHudLayout({
-                            [fontKey]: parseInt(e.target.value, 10) || defaultFont,
+                            [opKey]: parseFloat(e.target.value),
                           })
                         }
-                        className="w-20 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                        className="w-24 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
                       />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          onUpdateHudLayout({
-                            [fontKey]: Math.min(24, currentSize + 1),
-                          })
-                        }
-                        className="w-5 h-5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer"
-                        title="Tăng cỡ chữ (+1px)"
-                      >
-                        <Plus className="w-3 h-3" />
-                      </button>
-                      <span className="w-8 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
-                        {currentSize}px
+                      <span className="w-9 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
+                        {opPercent}%
                       </span>
                     </div>
-                  ) : (
-                    <span className="text-[10px] text-stone-500 italic">
-                      Ảnh PNG (Kéo góc chỉnh cỡ)
-                    </span>
-                  )}
+                  </div>
                 </div>
               );
             })}
@@ -710,24 +770,118 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
         </div>
 
-        <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
-          <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-            <span>Độ mờ nền của tất cả các bảng HUD</span>
-            <span className="text-amber-300 font-mono tabular-nums">
-              {Math.round((config.hudLayout.hudOpacity ?? 0.88) * 100)}%
-            </span>
+        {/* Quản lý thêm / bớt các dòng trong Bảng Hướng Dẫn */}
+        <div className="p-2.5 rounded-lg bg-stone-900/75 border border-emerald-500/35 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-bold text-emerald-200 block">
+                📋 Thêm / Bớt các dòng trong Bảng Hướng Dẫn ({(config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS).length} dòng)
+              </span>
+              <span className="text-[10px] text-stone-400">
+                Tùy chỉnh icon lễ vật, tên mục và mô tả cho từng dòng trên Bảng Hướng Dẫn
+              </span>
+            </div>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const currentList =
+                    config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS;
+                  const nextItem: GuideTaskItem = {
+                    id: `guide-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+                    label: 'Mục mới',
+                    shortDesc: 'Nội dung hướng dẫn',
+                    modelType: 'rose',
+                    colorTheme: 'amber',
+                  };
+                  onUpdateHudLayout({ guideItems: [...currentList, nextItem] });
+                }}
+                className="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition"
+              >
+                <Plus className="w-3 h-3" />
+                <span>Thêm dòng</span>
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  onUpdateHudLayout({ guideItems: DEFAULT_GUIDE_ITEMS })
+                }
+                title="Khôi phục 7 dòng hướng dẫn mặc định"
+                className="px-1.5 py-1 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            </div>
           </div>
-          <input
-            type="range"
-            min={0.1}
-            max={1}
-            step={0.05}
-            value={config.hudLayout.hudOpacity ?? 0.88}
-            onChange={(e) =>
-              onUpdateHudLayout({ hudOpacity: parseFloat(e.target.value) })
-            }
-            className="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-          />
+
+          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
+            {(config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS).map(
+              (item, idx) => {
+                const currentList =
+                  config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS;
+                const updateItem = (patch: Partial<GuideTaskItem>) => {
+                  const next = currentList.map((it, i) =>
+                    i === idx ? { ...it, ...patch } : it
+                  );
+                  onUpdateHudLayout({ guideItems: next });
+                };
+                const removeItem = () => {
+                  const next = currentList.filter((_, i) => i !== idx);
+                  onUpdateHudLayout({ guideItems: next });
+                };
+
+                return (
+                  <div
+                    key={item.id || idx}
+                    className="p-1.5 rounded-lg bg-stone-950 border border-stone-800 flex items-center gap-1.5"
+                  >
+                    <select
+                      value={item.modelType || 'none'}
+                      onChange={(e) =>
+                        updateItem({
+                          modelType: e.target.value as GuideTaskItem['modelType'],
+                        })
+                      }
+                      className="px-1.5 py-1 rounded bg-stone-900 border border-stone-700 text-[10px] text-amber-300 shrink-0 focus:outline-none"
+                      title="Chọn icon lễ vật bên trái dòng"
+                    >
+                      <option value="none">Không icon</option>
+                      <option value="rose">🌹 Sen hồng</option>
+                      <option value="lotus">🪷 Sen vàng</option>
+                      <option value="tray">🍑 Mâm quả</option>
+                      <option value="special_tray">👑 Mâm đặc biệt</option>
+                      <option value="incense">🕯️ Nhang</option>
+                    </select>
+
+                    <input
+                      type="text"
+                      value={item.label}
+                      onChange={(e) => updateItem({ label: e.target.value })}
+                      placeholder="Tên quà/mục..."
+                      className="w-24 px-1.5 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] font-bold text-amber-200 focus:outline-none focus:border-amber-500 shrink-0"
+                    />
+
+                    <input
+                      type="text"
+                      value={item.shortDesc}
+                      onChange={(e) => updateItem({ shortDesc: e.target.value })}
+                      placeholder="Mô tả..."
+                      className="flex-1 min-w-0 px-1.5 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] text-stone-100 focus:outline-none focus:border-amber-500"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={removeItem}
+                      title="Xóa dòng này khỏi Bảng Hướng Dẫn"
+                      className="p-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-500/30 cursor-pointer shrink-0 transition"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                );
+              }
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-2 gap-2">

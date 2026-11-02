@@ -79,26 +79,26 @@
   40%, 60% { transform: translateY(9px) scaleY(0.84); }
 }
 
-/* Hiệu ứng bảng thông báo trôi lên trên rồi mờ biến mất */
+/* Hiệu ứng bảng thông báo dâng lễ hiện rõ trong bảng rồi mờ dần khi hết thời gian */
 .toast-float-up {
-  animation: toastFloatFade 3.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: toastPopStayFade 7.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-@keyframes toastFloatFade {
+@keyframes toastPopStayFade {
   0% {
-    transform: translateY(10px);
+    transform: translateY(8px) scale(0.96);
     opacity: 0;
   }
-  12% {
-    transform: translateY(0px);
+  6% {
+    transform: translateY(0px) scale(1);
     opacity: 1;
   }
-  75% {
-    transform: translateY(-28px);
-    opacity: 0.92;
+  88% {
+    transform: translateY(0px) scale(1);
+    opacity: 1;
   }
   100% {
-    transform: translateY(-56px);
+    transform: translateY(-4px) scale(0.98);
     opacity: 0;
   }
 }
