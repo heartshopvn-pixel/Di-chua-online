@@ -418,6 +418,8 @@ export interface SyncPacket {
     | 'TRIGGER_GRAND_EVENT'
     | 'ENTITY_CHAT'
     | 'CLEAR_DONORS'
+    | 'UPDATE_CUSTOM_ASSETS'
+    | 'REQUEST_FULL_SYNC'
     | 'RESTORE_BACKUP';
   payload: Record<string, any>;
   ts: number;

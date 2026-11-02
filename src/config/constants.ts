@@ -489,9 +489,48 @@ wss.on('connection', ws => {
   });
 });
 
-tiktok.connect().then(state => {
-  console.log(\`Đã kết nối phòng Live: \${state.roomId || TIKTOK_USERNAME}\`);
-}).catch(err => console.error('Lỗi kết nối TikTok:', err));
+let isConnecting = false;
+let isConnected = false;
+
+function connectTikTok() {
+  if (isConnecting || isConnected) return;
+  isConnecting = true;
+  console.log(\`[KẾT NỐI] Đang kết nối tới phòng Live TikTok @\${TIKTOK_USERNAME}...\`);
+  tiktok.connect().then(state => {
+    isConnecting = false;
+    isConnected = true;
+    console.log(\`[THÀNH CÔNG] Đã kết nối phòng Live: \${state.roomId || TIKTOK_USERNAME}\`);
+  }).catch(err => {
+    isConnecting = false;
+    isConnected = false;
+    console.error('[LỖI KẾT NỐI TIKTOK]:', err?.message || err);
+    console.log('-> Tự động thử kết nối lại sau 8 giây...');
+    setTimeout(connectTikTok, 8000);
+  });
+}
+
+connectTikTok();
+
+tiktok.on('disconnected', () => {
+  isConnected = false;
+  console.warn('[MẤT KẾT NỐI] Luồng TikTok Live bị ngắt! Đang tự động kết nối lại sau 5 giây...');
+  setTimeout(connectTikTok, 5000);
+});
+
+tiktok.on('streamEnd', () => {
+  isConnected = false;
+  console.warn('[KẾT THÚC LIVE] TikTok báo phiên Live đã kết thúc. Sẽ kiểm tra lại sau 15 giây...');
+  setTimeout(connectTikTok, 15000);
+});
+
+tiktok.on('error', err => {
+  console.error('[CẢNH BÁO LUỒNG TIKTOK]:', err?.message || err);
+});
+
+setInterval(() => {
+  const timeStr = new Date().toLocaleTimeString('vi-VN');
+  console.log(\`[NHỊP TIM \${timeStr}] Trạng thái TikTok: \${isConnected ? 'ĐANG LẮNG NGHE TỐT' : 'ĐANG KẾT NỐI LẠI...'} | WebSocket Clients: \${wss.clients.size}\`);
+}, 30000);
 
 tiktok.on('chat', data => {
   const username = getUserName(data);
@@ -544,18 +583,23 @@ tiktok.on('gift', data => {
 });
 
 tiktok.on('like', data => {
+  const username = getUserName(data);
+  const likeCount = data.likeCount || 1;
+  console.log(\`[LIKE] \${username} thả \${likeCount} tim\`);
   broadcast({
     type: 'like',
-    username: getUserName(data),
+    username,
     avatarUrl: getUserAvatar(data),
-    likeCount: data.likeCount || 1
+    likeCount
   });
 });
 
 tiktok.on('follow', data => {
+  const username = getUserName(data);
+  console.log(\`[FOLLOW] \${username} vừa follow kênh\`);
   broadcast({
     type: 'follow',
-    username: getUserName(data),
+    username,
     avatarUrl: getUserAvatar(data)
   });
 });`;

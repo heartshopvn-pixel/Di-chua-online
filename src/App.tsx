@@ -14,6 +14,7 @@ export default function App() {
   const isPureStreamMode =
     typeof window !== 'undefined' &&
     (new URLSearchParams(window.location.search).get('view') === 'live' ||
+      new URLSearchParams(window.location.search).get('mode') === 'live' ||
       new URLSearchParams(window.location.search).get('obs') === '1');
 
   const [studioOpen, setStudioOpen] = useState(!isPureStreamMode);

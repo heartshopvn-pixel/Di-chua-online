@@ -46,13 +46,24 @@ class LiveSyncService {
     return host.endsWith('github.io') || host.endsWith('pages.dev') || host.endsWith('vercel.app') || host.endsWith('netlify.app');
   }
 
+  private reconnectEsTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastWsUrl: string = '';
+  private shouldReconnectWs: boolean = false;
+  private reconnectWsTimer: ReturnType<typeof setTimeout> | null = null;
+
   private initServerRelay() {
     if (typeof window === 'undefined' || !('EventSource' in window) || this.isStaticHost()) return;
     const params = new URLSearchParams(window.location.search);
-    const isObs = params.get('obs') === '1' || params.get('view') === 'live';
+    const isObs =
+      params.get('obs') === '1' ||
+      params.get('view') === 'live' ||
+      params.get('mode') === 'live';
     const role = isObs ? 'obs' : 'admin';
 
     try {
+      if (this.eventSource) {
+        this.eventSource.close();
+      }
       const es = new EventSource(
         `/api/sync-stream?clientId=${encodeURIComponent(this.clientId)}&role=${role}`
       );
@@ -75,6 +86,10 @@ class LiveSyncService {
 
       es.onerror = () => {
         es.close();
+        if (this.reconnectEsTimer) clearTimeout(this.reconnectEsTimer);
+        this.reconnectEsTimer = setTimeout(() => {
+          this.initServerRelay();
+        }, 3000);
       };
     } catch {
       // Ignore SSE error if offline
@@ -189,12 +204,19 @@ class LiveSyncService {
 
   public connectWebSocket(url: string) {
     if (!url.trim()) return;
+    this.lastWsUrl = url.trim();
+    this.shouldReconnectWs = true;
+    if (this.reconnectWsTimer) {
+      clearTimeout(this.reconnectWsTimer);
+      this.reconnectWsTimer = null;
+    }
     try {
       if (this.ws) {
+        this.ws.onclose = null;
         this.ws.close();
       }
       this.setStatus('connecting');
-      const socket = new WebSocket(url.trim());
+      const socket = new WebSocket(this.lastWsUrl);
       this.ws = socket;
 
       socket.onopen = () => {
@@ -349,6 +371,12 @@ class LiveSyncService {
 
       socket.onclose = () => {
         this.setStatus('simulated');
+        if (this.shouldReconnectWs && this.lastWsUrl) {
+          if (this.reconnectWsTimer) clearTimeout(this.reconnectWsTimer);
+          this.reconnectWsTimer = setTimeout(() => {
+            this.connectWebSocket(this.lastWsUrl);
+          }, 4000);
+        }
       };
 
       socket.onerror = () => {

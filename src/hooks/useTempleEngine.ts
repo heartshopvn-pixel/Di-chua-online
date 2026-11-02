@@ -571,6 +571,9 @@ export function useTempleEngine() {
   const normalSlotsRef = useRef(normalSlots);
   const pilgrimsRef = useRef<PilgrimData[]>([]);
   const monksRef = useRef<TempleMonkData[]>(INITIAL_MONKS.map((m) => ({ ...m })));
+  const customAssetsRef = useRef<CustomAssetsConfig>(customAssets);
+  const donorsRef = useRef<DonorEntry[]>(donors);
+  const prevObsPeersRef = useRef<number>(0);
   const queueRef = useRef<QueuedPilgrimRequest[]>([]);
   const nextIdRef = useRef(1);
   const lastBotTtsSecRef = useRef(0);
@@ -697,6 +700,7 @@ export function useTempleEngine() {
   }, [normalSlots]);
 
   useEffect(() => {
+    customAssetsRef.current = customAssets;
     const timer = setTimeout(() => {
       // Lưu đầy đủ toàn bộ ảnh nền, Sư Trụ Trì, Chú Tiểu Lớn/Nhỏ, Phật Tử vào IndexedDB để F5 không bao giờ bị mất
       void idbSet(TEMPLE_CUSTOM_ASSETS_STORAGE_KEY, customAssets);
@@ -771,7 +775,58 @@ export function useTempleEngine() {
     });
     const unsubPeers = syncService.onPeerCountChange((counts) => {
       setPeerCounts(counts);
+      const isObsClient =
+        typeof window !== 'undefined' &&
+        (new URLSearchParams(window.location.search).get('obs') === '1' ||
+          new URLSearchParams(window.location.search).get('view') === 'live' ||
+          new URLSearchParams(window.location.search).get('mode') === 'live');
+      if (!isObsClient && counts.obsPeers > prevObsPeersRef.current) {
+        syncService.sendCommand('RESTORE_BACKUP', {
+          config: configRef.current,
+          vipSlots: vipSlotsRef.current.map((s) => ({
+            id: s.id,
+            x: s.x,
+            y: s.y,
+            side: s.side,
+          })),
+          normalSlots: normalSlotsRef.current.map((s) => ({
+            id: s.id,
+            x: s.x,
+            y: s.y,
+            side: s.side,
+            row: s.row,
+            col: s.col,
+          })),
+          npcNames: npcNamesRef.current,
+          npcPrayers: npcPrayersRef.current,
+          npcAvatars: npcAvatarsRef.current,
+          customAssets: customAssetsRef.current,
+          donors: donorsRef.current,
+          pilgrims: pilgrimsRef.current,
+          monks: monksRef.current,
+        });
+      }
+      prevObsPeersRef.current = counts.obsPeers;
     });
+    // Nếu tab này là OBS/Live Studio (?obs=1 hoặc ?mode=live), tự động xin bản đồng bộ đầy đủ từ tab Admin ngay khi mở
+    if (
+      typeof window !== 'undefined' &&
+      (new URLSearchParams(window.location.search).get('obs') === '1' ||
+        new URLSearchParams(window.location.search).get('view') === 'live' ||
+        new URLSearchParams(window.location.search).get('mode') === 'live')
+    ) {
+      const syncTimer = setTimeout(() => {
+        syncService.sendCommand('REQUEST_FULL_SYNC', {});
+      }, 600);
+      return () => {
+        clearTimeout(syncTimer);
+        unsubTts();
+        unsubEventQueue();
+        unsubDharma();
+        unsubWs();
+        unsubPeers();
+      };
+    }
     return () => {
       unsubTts();
       unsubEventQueue();
@@ -2608,8 +2663,52 @@ export function useTempleEngine() {
           }
           break;
         }
+        case 'UPDATE_CUSTOM_ASSETS': {
+          if (payload.customAssets && typeof payload.customAssets === 'object') {
+            setCustomAssets((prev) => ({ ...prev, ...payload.customAssets }));
+          }
+          break;
+        }
+        case 'REQUEST_FULL_SYNC': {
+          const isObsClient =
+            typeof window !== 'undefined' &&
+            (new URLSearchParams(window.location.search).get('obs') === '1' ||
+              new URLSearchParams(window.location.search).get('view') === 'live' ||
+              new URLSearchParams(window.location.search).get('mode') === 'live');
+          if (!isObsClient) {
+            syncService.sendCommand('RESTORE_BACKUP', {
+              config: configRef.current,
+              vipSlots: vipSlotsRef.current.map((s) => ({
+                id: s.id,
+                x: s.x,
+                y: s.y,
+                side: s.side,
+              })),
+              normalSlots: normalSlotsRef.current.map((s) => ({
+                id: s.id,
+                x: s.x,
+                y: s.y,
+                side: s.side,
+                row: s.row,
+                col: s.col,
+              })),
+              npcNames: npcNamesRef.current,
+              npcPrayers: npcPrayersRef.current,
+              npcAvatars: npcAvatarsRef.current,
+              customAssets: customAssetsRef.current,
+              donors: donorsRef.current,
+              pilgrims: pilgrimsRef.current,
+              monks: monksRef.current,
+            });
+          }
+          break;
+        }
         case 'RESTORE_BACKUP': {
-          const data = payload as StudioBackupData;
+          const data = payload as StudioBackupData & {
+            donors?: DonorEntry[];
+            pilgrims?: PilgrimData[];
+            monks?: TempleMonkData[];
+          };
           if (data.config) {
             const merged = mergeGameConfigWithDefaults(data.config);
             configRef.current = merged;
@@ -2657,6 +2756,18 @@ export function useTempleEngine() {
           if (Array.isArray(data.npcAvatars)) {
             setNpcAvatars(data.npcAvatars);
             saveStringListToStorage(NPC_AVATARS_STORAGE_KEY, data.npcAvatars);
+          }
+          if (Array.isArray(data.donors)) {
+            donorsRef.current = data.donors;
+            setDonors(data.donors);
+          }
+          if (Array.isArray(data.pilgrims)) {
+            pilgrimsRef.current = data.pilgrims;
+            setPilgrims([...data.pilgrims]);
+          }
+          if (Array.isArray(data.monks)) {
+            monksRef.current = data.monks;
+            setMonks([...data.monks]);
           }
           break;
         }
@@ -3190,7 +3301,15 @@ export function useTempleEngine() {
       const reader = new FileReader();
       reader.onload = () => {
         if (typeof reader.result === 'string') {
-          setCustomAssets((prev) => ({ ...prev, [key]: reader.result as string }));
+          const dataUrl = reader.result as string;
+          setCustomAssets((prev) => {
+            const next = { ...prev, [key]: dataUrl };
+            customAssetsRef.current = next;
+            syncService.sendCommand('UPDATE_CUSTOM_ASSETS', {
+              customAssets: { [key]: dataUrl },
+            });
+            return next;
+          });
         }
       };
       reader.onerror = () => {
@@ -3203,7 +3322,15 @@ export function useTempleEngine() {
   );
 
   const handleResetAsset = useCallback((key: keyof CustomAssetsConfig) => {
-    setCustomAssets((prev) => ({ ...prev, [key]: DEFAULT_SPRITESHEETS[key] || null }));
+    const defaultVal = DEFAULT_SPRITESHEETS[key] || null;
+    setCustomAssets((prev) => {
+      const next = { ...prev, [key]: defaultVal };
+      customAssetsRef.current = next;
+      syncService.sendCommand('UPDATE_CUSTOM_ASSETS', {
+        customAssets: { [key]: defaultVal },
+      });
+      return next;
+    });
   }, []);
 
   const getBackupObject = useCallback((): StudioBackupData => {
