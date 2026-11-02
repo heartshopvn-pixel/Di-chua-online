@@ -196,6 +196,40 @@
   animation: burnerLotusExplode 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
+/* Floating text +số hoa sen (màu hồng không viền kèm icon model hoa sen không viền) tại vị trí lễ vật tan biến */
+@keyframes burnerLotusFloatScore {
+  0% {
+    transform: translate(-50%, -20%) scale(0.75);
+    opacity: 0;
+  }
+  15% {
+    transform: translate(-50%, -75%) scale(1.08);
+    opacity: 1;
+  }
+  30% {
+    transform: translate(-50%, -105%) scale(1);
+    opacity: 1;
+  }
+  78% {
+    transform: translate(-50%, -175%) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -220%) scale(0.94);
+    opacity: 0;
+  }
+}
+
+.burner-lotus-float-score {
+  animation: burnerLotusFloatScore 1.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.lotus-score-pink {
+  color: #f472b6;
+  -webkit-text-stroke: 0px transparent;
+  text-shadow: 0 0 8px rgba(244, 114, 182, 0.45);
+}
+
 /* Hoa sen kích thước vừa bay từ chậm rồi tăng tốc dần về nhập vào bảng Sự kiện Đại lễ */
 @keyframes flyingLotusToBoard {
   0% {
@@ -256,5 +290,6 @@
 .flying-lotus-projectile {
   animation: flyingLotusToBoard 1.65s linear forwards;
 }
+
 
 

@@ -74,7 +74,7 @@ export default function App() {
         normalSlots={engine.normalSlots}
         pilgrims={engine.pilgrims}
         monks={engine.monks}
-        donors={engine.donors}
+        lotusDonors={engine.lotusDonors}
         floatingToasts={engine.floatingToasts}
         customAssets={engine.customAssets}
         grandEventProgress={engine.grandEventProgress}
@@ -158,8 +158,8 @@ export default function App() {
           onResetAsset={engine.handleResetAsset}
           onSaveBackupJson={engine.handleSaveBackupJson}
           onLoadBackupJson={engine.handleLoadBackupJson}
-          donorsCount={engine.donors.length}
-          onClearDonors={engine.handleClearDonors}
+          lotusDonorsCount={engine.lotusDonors.length}
+          onClearLotusDonors={engine.handleClearLotusDonors}
           eventTtsQueue={engine.eventTtsQueue}
           onClearEventTtsQueue={engine.handleClearEventTtsQueue}
           cameraFocus={engine.cameraFocus}

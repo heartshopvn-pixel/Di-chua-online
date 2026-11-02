@@ -247,6 +247,27 @@ class LiveSyncService {
     }
   }
 
+  public disconnectWebSocket() {
+    this.shouldReconnectWs = false;
+    if (this.reconnectWsTimer) {
+      clearTimeout(this.reconnectWsTimer);
+      this.reconnectWsTimer = null;
+    }
+    if (this.ws) {
+      try {
+        this.ws.onopen = null;
+        this.ws.onmessage = null;
+        this.ws.onerror = null;
+        this.ws.onclose = null;
+        this.ws.close();
+      } catch {
+        // Ignore
+      }
+      this.ws = null;
+    }
+    this.setStatus('simulated');
+  }
+
   public connectWebSocket(url: string) {
     if (!url.trim()) return;
     this.lastWsUrl = url.trim();
@@ -387,6 +408,10 @@ class LiveSyncService {
               username: extractUsername(raw),
               avatarUrl: extractAvatar(raw) || extractAvatar(raw.raw),
               comment: extractComment(raw),
+              likeCount: Math.max(
+                1,
+                Number(raw.likeCount ?? raw.count ?? raw.unmergedLikeCount ?? 1)
+              ),
             };
             this.tiktokListeners.forEach((fn) => fn(normalized));
             return;
@@ -417,7 +442,10 @@ class LiveSyncService {
                 giftName:
                   d.giftName || d.giftDetails?.giftName || d.gift?.name || 'Lễ vật',
                 coins: Math.max(1, Number(diamondCount) * Number(repeatCount)),
-                likeCount: Number(d.likeCount || 1),
+                likeCount: Math.max(
+                  1,
+                  Number(d.likeCount ?? d.count ?? d.unmergedLikeCount ?? 1)
+                ),
               })
             );
           }

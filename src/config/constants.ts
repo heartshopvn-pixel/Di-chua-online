@@ -196,13 +196,16 @@ export const DEFAULT_CONFIG: GameConfig = {
   ttsEnabled: true,
   ttsVipOnly: true,
   ttsEngine: 'web_speech',
-  nodeVoice: 'vi-VN-HoaiMyNeural',
+  nodeVoice: 'google-vi-gtx',
   nodeTtsEndpoint: 'http://localhost:3000/tts',
   selectedSystemVoiceURI: '',
   ttsRate: 1.05,
   ttsPitch: 1.0,
   ttsVolume: 1.0,
+  ttsReverb: 0,
   ttsTemplate: 'Phật tử {name} thành tâm cầu nguyện: {prayer}',
+  maxTtsWords: 25,
+  maxTtsQueueSize: 30,
 
   // Nhạc nền, Chuông & Mõ
   bgmEnabled: false,
@@ -317,10 +320,10 @@ export const DEFAULT_CONFIG: GameConfig = {
   hudLayout: {
     // Hình vàng: Bảng tên chùa (PNG cắt nền, không text)
     templeSign: { x: 195, y: 78, width: 150, height: 58 },
-    // Hình trắng trên: Bảng xếp hạng (Tiêu đề: Bảng công đức)
-    leaderboardBox: { x: 392, y: 84, width: 136, height: 64 },
+    // Bảng xếp hạng số tim / hoa sen (Tiêu đề: Bảng Hoa Sen)
+    lotusLeaderboardBox: { x: 392, y: 84, width: 136, height: 74 },
     // Hình trắng dưới: Bảng hướng dẫn (7 dòng ngắn gọn kèm model quà bên trái)
-    guideBox: { x: 392, y: 154, width: 136, height: 192 },
+    guideBox: { x: 392, y: 166, width: 136, height: 192 },
     // Bảng Sự kiện Đại lễ (Góc trên bên trái, có thanh tích lũy + hoa sen hồng nhấp nháy)
     grandEventBox: { x: 12, y: 84, width: 168, height: 62 },
     // Bảng đếm số Phật tử: x/x (Bên trái dưới Bảng Đại Lễ)
@@ -329,7 +332,7 @@ export const DEFAULT_CONFIG: GameConfig = {
     noticeBoardBox: { x: 12, y: 190, width: 168, height: 76 },
     // Hình đen bên trái: Bảng Toast Dâng Lễ & Thông báo sự kiện
     toastBox: { x: 12, y: 274, width: 168, height: 54 },
-    leaderboardTitle: 'Bảng công đức',
+    lotusLeaderboardTitle: 'Bảng Hoa Sen',
     guideTitle: 'Bảng hướng dẫn',
     grandEventTitle: 'Sự kiện Đại Lễ',
     pilgrimCountTitle: 'Phật tử',
@@ -338,23 +341,24 @@ export const DEFAULT_CONFIG: GameConfig = {
       'Chào mừng Phật tử thập phương về Kim Thiền Tự lễ Phật, cầu bình an & sức khỏe 🙏',
     noticeBoardFontSize: 10,
     grandEventFontSize: 10,
-    leaderboardFontSize: 10,
+    lotusLeaderboardFontSize: 10,
     guideFontSize: 9,
     pilgrimCountFontSize: 10,
     toastFontSize: 10,
     showTempleSign: true,
     showGrandEventBox: true,
     showPilgrimCountBox: true,
-    showLeaderboardBox: true,
+    showLotusLeaderboardBox: true,
     showGuideBox: true,
     showNoticeBoardBox: true,
     showToastBox: true,
     showNewPilgrimToast: true,
-    leaderboardMaxRanks: 5,
+    lotusLeaderboardMaxRanks: 5,
+    lotusFloatingScoreFontSize: 12,
     hudOpacity: 0.88,
     noticeBoardOpacity: 0.88,
     grandEventOpacity: 0.88,
-    leaderboardOpacity: 0.88,
+    lotusLeaderboardOpacity: 0.88,
     guideOpacity: 0.88,
     pilgrimCountOpacity: 0.88,
     toastOpacity: 0.88,
@@ -493,27 +497,79 @@ function openAlertLink(reason) {
   });
 }
 
-// 1. Tạo Server HTTP cấp phát Giọng Đọc AI Miễn Phí cho Web & OBS Browser Source
+// 1. Tạo Server HTTP cấp phát Giọng Đọc AI Đa Luồng + Cache RAM (0ms cho câu lặp lại)
 const app = express();
 app.use(cors());
 
+const ttsCache = new Map();
+const MAX_TTS_CACHE = 180;
+
+async function fetchGoogleMirrorBuffer(text, voiceVariant) {
+  const isSlow = voiceVariant === 'google-vi-slow';
+  const speedParam = isSlow ? '0.24' : '1';
+  const encoded = encodeURIComponent(text);
+  const gtxUrl = \`https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=vi&client=gtx&ttsspeed=\${speedParam}&q=\${encoded}\`;
+  const twObUrl = \`https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&ttsspeed=\${speedParam}&q=\${encoded}\`;
+  const urls = voiceVariant === 'google-vi-twob' ? [twObUrl, gtxUrl] : [gtxUrl, twObUrl];
+
+  for (const url of urls) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36',
+          'Referer': 'https://translate.google.com/'
+        }
+      });
+      if (!response.ok) continue;
+      const arrayBuffer = await response.arrayBuffer();
+      const buf = Buffer.from(arrayBuffer);
+      if (buf.length > 128) return buf;
+    } catch (e) {}
+  }
+  throw new Error('Google TTS mirrors unreachable');
+}
+
 app.get('/tts', async (req, res) => {
   try {
-    const text = (req.query.text || 'Nam mô A Di Đà Phật').slice(0, 220);
-    const voice = req.query.voice || 'vi-VN-HoaiMyNeural';
+    const text = String(req.query.text || 'Nam mô A Di Đà Phật').trim().slice(0, 220);
+    const voice = String(req.query.voice || 'google-vi-gtx').trim();
+    const cacheKey = \`\${voice}:\${text}\`;
 
-    if (voice === 'google-vi' || !MsEdgeTTS) {
-      const gUrl = \`https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=\${encodeURIComponent(text)}\`;
-      const response = await fetch(gUrl);
+    if (ttsCache.has(cacheKey)) {
       res.setHeader('Content-Type', 'audio/mpeg');
-      const arrayBuffer = await response.arrayBuffer();
-      return res.send(Buffer.from(arrayBuffer));
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(ttsCache.get(cacheKey));
     }
 
+    if (voice.startsWith('google-') || !MsEdgeTTS) {
+      const buf = await fetchGoogleMirrorBuffer(text, voice);
+      if (ttsCache.size >= MAX_TTS_CACHE) {
+        const firstKey = ttsCache.keys().next().value;
+        if (firstKey) ttsCache.delete(firstKey);
+      }
+      ttsCache.set(cacheKey, buf);
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(buf);
+    }
+
+    const edgeVoice = voice.includes('NamMinh') ? 'vi-VN-NamMinhNeural' : 'vi-VN-HoaiMyNeural';
     const tts = new MsEdgeTTS();
-    await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_Mono_MP3);
+    await tts.setMetadata(edgeVoice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_Mono_MP3);
     res.setHeader('Content-Type', 'audio/mpeg');
     const readable = tts.toStream(text);
+    const chunks = [];
+    readable.on('data', chunk => chunks.push(Buffer.from(chunk)));
+    readable.on('end', () => {
+      const fullBuf = Buffer.concat(chunks);
+      if (fullBuf.length > 128) {
+        if (ttsCache.size >= MAX_TTS_CACHE) {
+          const firstKey = ttsCache.keys().next().value;
+          if (firstKey) ttsCache.delete(firstKey);
+        }
+        ttsCache.set(cacheKey, fullBuf);
+      }
+    });
     readable.pipe(res);
   } catch (err) {
     console.error('TTS Error:', err.message);
@@ -683,9 +739,53 @@ setInterval(() => {
   console.log(\`[NHỊP TIM \${timeStr}] Trạng thái TikTok: \${isConnected ? 'ĐANG LẮNG NGHE TỐT' : 'ĐANG KẾT NỐI LẠI...'} | WebSocket Clients: \${wss.clients.size}\`);
 }, 30000);
 
+const seenChatMsgIds = new Set();
+const userLastChatMap = new Map();
+const recentRoomChatMap = new Map();
+
+function normalizeChatForSpam(text) {
+  return String(text || '')
+    .toLowerCase()
+    .replace(/[\\p{Extended_Pictographic}\\p{Emoji_Presentation}\\u2600-\\u27BF\\uFE00-\\uFE0F]/gu, '')
+    .replace(/[^\\p{L}\\p{N}\\s]/gu, ' ')
+    .replace(/\\s+/g, ' ')
+    .trim();
+}
+
 tiktok.on('chat', data => {
+  const msgId = data?.msgId || data?.common?.msgId || null;
+  if (msgId) {
+    if (seenChatMsgIds.has(msgId)) return;
+    seenChatMsgIds.add(msgId);
+    if (seenChatMsgIds.size > 600) {
+      const first = seenChatMsgIds.values().next().value;
+      seenChatMsgIds.delete(first);
+    }
+  }
+
   const username = getUserName(data);
-  const comment = getCommentText(data);
+  const userKey = String(data?.user?.uniqueId || data?.uniqueId || username).toLowerCase();
+  const comment = String(getCommentText(data) || '').trim();
+  const norm = normalizeChatForSpam(comment);
+  const now = Date.now();
+
+  if (!norm) {
+    console.log(\`[SKIP ICON SPAM] \${username}: \${comment}\`);
+    return;
+  }
+  const prevUser = userLastChatMap.get(userKey);
+  if (prevUser && prevUser.norm === norm && now - prevUser.time < 90000) {
+    console.log(\`[SKIP LẶP CÂU USER] \${username}: \${comment}\`);
+    return;
+  }
+  const prevRoomTime = recentRoomChatMap.get(norm);
+  if (prevRoomTime && now - prevRoomTime < 20000) {
+    console.log(\`[SKIP LẶP CÂU PHÒNG] \${username}: \${comment}\`);
+    return;
+  }
+  userLastChatMap.set(userKey, { norm, time: now });
+  recentRoomChatMap.set(norm, now);
+
   console.log(\`[CHAT] \${username}: \${comment}\`);
   broadcast({
     type: 'chat',
@@ -733,15 +833,34 @@ tiktok.on('gift', data => {
   });
 });
 
+let lastRoomTotalLikes = 0;
+
 tiktok.on('like', data => {
   const username = getUserName(data);
-  const likeCount = data.likeCount || 1;
-  console.log(\`[LIKE] \${username} thả \${likeCount} tim\`);
+  const rawCount = Number(
+    data?.likeCount ??
+    data?.count ??
+    data?.unmergedLikeCount ??
+    0
+  );
+  const totalRoom = Number(data?.totalLikeCount ?? 0);
+  let likeCount = rawCount > 0 ? rawCount : 1;
+  if (rawCount <= 1 && totalRoom > lastRoomTotalLikes && lastRoomTotalLikes > 0) {
+    const roomDelta = totalRoom - lastRoomTotalLikes;
+    if (roomDelta > 1 && roomDelta <= 100) {
+      likeCount = roomDelta;
+    }
+  }
+  if (totalRoom > lastRoomTotalLikes) {
+    lastRoomTotalLikes = totalRoom;
+  }
+  console.log(\`[LIKE] \${username} thả +\${likeCount} tim\`);
   broadcast({
     type: 'like',
     username,
     avatarUrl: getUserAvatar(data),
-    likeCount
+    likeCount,
+    totalLikeCount: totalRoom
   });
 });
 

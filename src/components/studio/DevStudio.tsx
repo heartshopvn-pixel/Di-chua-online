@@ -3,11 +3,8 @@ import {
   Camera,
   Check,
   Copy,
-  Crosshair,
   Download,
   Gamepad2,
-  Maximize2,
-  Move,
   PanelRightClose,
   Sliders,
   ShieldCheck,
@@ -120,8 +117,8 @@ interface DevStudioProps {
   onResetAsset: (key: keyof CustomAssetsConfig) => void;
   onSaveBackupJson: () => void;
   onLoadBackupJson: (rawJsonText: string) => { ok: boolean; message: string };
-  donorsCount?: number;
-  onClearDonors?: () => void;
+  lotusDonorsCount?: number;
+  onClearLotusDonors?: () => void;
   eventTtsQueue: {
     waitingCount: number;
     isPlayingEvent: boolean;
@@ -204,8 +201,8 @@ export const DevStudio: React.FC<DevStudioProps> = ({
   onResetAsset,
   onSaveBackupJson,
   onLoadBackupJson,
-  donorsCount = 0,
-  onClearDonors,
+  lotusDonorsCount = 0,
+  onClearLotusDonors,
   eventTtsQueue,
   onClearEventTtsQueue,
   cameraFocus,
@@ -264,96 +261,31 @@ export const DevStudio: React.FC<DevStudioProps> = ({
 
   return (
     <aside className="w-[465px] max-w-full shrink-0 h-full bg-stone-950 border-l border-stone-800 flex flex-col z-40">
-      {/* Studio Top Bar */}
-      <div className="px-4 py-3 border-b border-stone-800 flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <h1 className="text-sm font-bold text-stone-100 truncate">
-              Đi Chùa Online Studio
-            </h1>
-            <span className="text-stone-600" aria-hidden="true">·</span>
-            <span className="text-[11px] text-stone-400 whitespace-nowrap">
-              {wsStatus === 'connected' ? 'TikTok Live' : 'Giả lập'}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={() =>
-              onUpdateHudLayout({ editLayoutMode: !config.hudLayout.editLayoutMode })
-            }
-            title="Kéo di chuyển & bấm góc chỉnh kích thước các bảng hiển thị"
-            className={`px-2 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
-              config.hudLayout.editLayoutMode
-                ? 'bg-amber-400 text-stone-950 font-semibold'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800'
-            }`}
-          >
-            <Move className="w-3 h-3" />
-            <span>Sửa Bảng</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() =>
-              onUpdateConfig({ showZoneBounds: !config.showZoneBounds })
-            }
-            title="Hiện vùng giới hạn di chuyển (Bấm vào cạnh hình chữ nhật để chỉnh kích thước vùng)"
-            className={`px-2 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
-              config.showZoneBounds
-                ? 'bg-fuchsia-400 text-stone-950 font-semibold'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800'
-            }`}
-          >
-            <Maximize2 className="w-3 h-3" />
-            <span>Vùng</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onUpdateConfig({ showWaypoints: !config.showWaypoints })}
-            title="Ẩn/Hiện các vòng tròn vị trí (Ghế ngồi, Lư hương, Mâm quả)"
-            className={`px-2 py-1.5 rounded-lg text-[11px] font-medium flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0 ${
-              config.showWaypoints
-                ? 'bg-emerald-400 text-stone-950 font-semibold'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-300 border border-stone-800'
-            }`}
-          >
-            <Crosshair className="w-3 h-3" />
-            <span>Vòng vị trí</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onCloseStudio}
-            title="Ẩn bảng điều khiển (Phím tắt F2)"
-            className="px-2 py-1.5 rounded-lg bg-stone-900 hover:bg-stone-800 border border-stone-800 text-[11px] font-medium text-stone-300 flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <PanelRightClose className="w-3 h-3" />
-            <span>F2</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Mode 3 Bar: Dual-Tab Remote Control + Save/Load JSON Backup */}
-      <div className="px-4 py-2.5 bg-stone-900/70 border-b border-stone-800 space-y-2">
+      {/* Studio Top Bar (Compact & Concise) */}
+      <div className="px-3.5 py-2.5 border-b border-stone-800 bg-stone-900/80 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-1.5 min-w-0">
             <Tv className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-            <span className="text-xs font-semibold text-stone-200 truncate">
-              Điều khiển 2 Tab (OBS + Admin)
+            <h1 className="text-xs font-extrabold text-stone-100 truncate">
+              Studio Điều Khiển
+            </h1>
+            <span className="text-stone-600">·</span>
+            <span
+              className={`text-[11px] font-mono whitespace-nowrap ${
+                wsStatus === 'connected' ? 'text-emerald-400 font-bold' : 'text-stone-400'
+              }`}
+            >
+              {wsStatus === 'connected' ? 'TikTok Live' : 'Giả lập'}
             </span>
-            <span className="text-stone-600" aria-hidden="true">·</span>
+            <span className="text-stone-600">·</span>
             <span
               className={`text-[11px] font-mono tabular-nums whitespace-nowrap ${
                 peerCounts.obsPeers > 0 ? 'text-emerald-400 font-semibold' : 'text-stone-400'
               }`}
             >
               {peerCounts.obsPeers > 0
-                ? `${peerCounts.obsPeers} màn hình OBS đang mở`
-                : `${peerCounts.totalPeers} tab đang mở`}
+                ? `${peerCounts.obsPeers} OBS`
+                : `${peerCounts.totalPeers} tab`}
             </span>
           </div>
 
@@ -366,13 +298,13 @@ export const DevStudio: React.FC<DevStudioProps> = ({
                   setPushedLiveSync(true);
                   setTimeout(() => setPushedLiveSync(false), 2000);
                 }}
-                title="Đẩy ngay lập tức toàn bộ vị trí bảng, ghế ngồi và cấu hình hiện tại từ trình duyệt này sang màn hình TikTok Live Studio mà không cần copy lại link"
+                title="Đẩy cấu hình sang màn hình Live"
                 className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-400 text-stone-950 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
               >
                 {pushedLiveSync ? (
                   <>
                     <Check className="w-3 h-3" />
-                    <span>Đã đẩy sang Live!</span>
+                    <span>Đã đồng bộ</span>
                   </>
                 ) : (
                   <>
@@ -386,20 +318,30 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             <button
               type="button"
               onClick={handleCopyObsLink}
-              title="Sao chép link chỉ hiển thị màn hình Game 9:16 để dán vào OBS hoặc tab thứ 2"
-              className="px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
+              title="Sao chép link OBS (?obs=1)"
+              className="px-2 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
             >
               {copiedObsLink ? (
                 <>
                   <Check className="w-3 h-3" />
-                  <span>Đã chép Link OBS</span>
+                  <span>Đã chép</span>
                 </>
               ) : (
                 <>
                   <Copy className="w-3 h-3" />
-                  <span>Copy Link OBS (?obs=1)</span>
+                  <span>Link OBS</span>
                 </>
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={onCloseStudio}
+              title="Ẩn Studio (F2)"
+              className="px-2 py-1 rounded-md bg-stone-900 hover:bg-stone-800 border border-stone-700 text-[11px] font-medium text-stone-300 flex items-center gap-1 transition cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <PanelRightClose className="w-3 h-3" />
+              <span>F2</span>
             </button>
           </div>
         </div>
@@ -409,19 +351,15 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             <button
               type="button"
               onClick={handleTopBarSaveJson}
-              title="Xuất toàn bộ cấu hình, vị trí ghế, bảng, NPC và âm thanh ra file .json"
-              className="px-2.5 py-1 rounded-md bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[11px] font-extrabold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap shadow-xs"
+              className="px-2 py-1 rounded-md bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[11px] font-extrabold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
             >
               <Download className="w-3 h-3" />
-              <span>Save JSON (.json)</span>
+              <span>Lưu JSON</span>
             </button>
 
-            <label
-              title="Nạp lại file cấu hình .json đã lưu từ máy tính"
-              className="px-2.5 py-1 rounded-md bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/50 text-cyan-200 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
-            >
+            <label className="px-2 py-1 rounded-md bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/50 text-cyan-200 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap">
               <Upload className="w-3 h-3 text-cyan-300" />
-              <span>Load JSON (.json)</span>
+              <span>Nạp JSON</span>
               <input
                 type="file"
                 accept=".json,application/json"
@@ -434,7 +372,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
           <button
             type="button"
             onClick={onToggleLocalMute}
-            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1.5 shrink-0 transition cursor-pointer whitespace-nowrap ${
+            className={`px-2 py-1 rounded-md text-[11px] font-semibold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap ${
               isLocalTabMuted
                 ? 'bg-rose-600 text-white'
                 : 'bg-stone-800 hover:bg-stone-700 text-stone-200 border border-stone-700'
@@ -443,12 +381,12 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             {isLocalTabMuted ? (
               <>
                 <VolumeX className="w-3 h-3" />
-                <span>Tab này: Đã tắt tiếng</span>
+                <span>Tắt tiếng tab</span>
               </>
             ) : (
               <>
                 <Volume2 className="w-3 h-3 text-emerald-400" />
-                <span>Tab này: Có tiếng</span>
+                <span>Mở tiếng tab</span>
               </>
             )}
           </button>
@@ -456,7 +394,7 @@ export const DevStudio: React.FC<DevStudioProps> = ({
 
         {backupNotice && (
           <div
-            className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold flex items-center justify-between ${
+            className={`px-2.5 py-1 rounded-md text-[11px] font-semibold flex items-center justify-between ${
               backupNotice.ok
                 ? 'bg-emerald-950/80 border border-emerald-500/50 text-emerald-200'
                 : 'bg-rose-950/80 border border-rose-500/50 text-rose-200'
@@ -467,8 +405,8 @@ export const DevStudio: React.FC<DevStudioProps> = ({
         )}
       </div>
 
-      {/* Clean Segmented Navigation Tabs (7 Tabs) */}
-      <div className="px-3 pt-3 pb-2 border-b border-stone-800 bg-stone-950">
+      {/* Navigation Tabs */}
+      <div className="px-3 pt-2 pb-2 border-b border-stone-800 bg-stone-950">
         <div className="grid grid-cols-7 gap-1 p-1 bg-stone-900 rounded-lg border border-stone-800/80">
           <button
             type="button"
@@ -586,8 +524,6 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             onTriggerGiftCombo={onTriggerGiftCombo}
             onSaveBackupJson={onSaveBackupJson}
             onLoadBackupJson={onLoadBackupJson}
-            donorsCount={donorsCount}
-            onClearDonors={onClearDonors}
           />
         )}
 
@@ -658,6 +594,8 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             onResetAsset={onResetAsset}
             onSaveBackupJson={onSaveBackupJson}
             onLoadBackupJson={onLoadBackupJson}
+            lotusDonorsCount={lotusDonorsCount}
+            onClearLotusDonors={onClearLotusDonors}
           />
         )}
 

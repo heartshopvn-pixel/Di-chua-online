@@ -57,13 +57,13 @@ export interface GuideTaskItem {
 
 export interface HudLayoutConfig {
   templeSign: HudBoxPosition;
-  leaderboardBox: HudBoxPosition;
+  lotusLeaderboardBox: HudBoxPosition;
   guideBox: HudBoxPosition;
   toastBox: HudBoxPosition;
   grandEventBox: HudBoxPosition;
   pilgrimCountBox: HudBoxPosition;
   noticeBoardBox: HudBoxPosition;
-  leaderboardTitle: string;
+  lotusLeaderboardTitle: string;
   guideTitle: string;
   grandEventTitle: string;
   pilgrimCountTitle: string;
@@ -71,23 +71,24 @@ export interface HudLayoutConfig {
   noticeBoardContent: string;
   noticeBoardFontSize: number;
   grandEventFontSize?: number;
-  leaderboardFontSize?: number;
+  lotusLeaderboardFontSize?: number;
   guideFontSize?: number;
   pilgrimCountFontSize?: number;
   toastFontSize?: number;
   showTempleSign?: boolean;
   showGrandEventBox?: boolean;
   showPilgrimCountBox?: boolean;
-  showLeaderboardBox?: boolean;
+  showLotusLeaderboardBox?: boolean;
   showGuideBox?: boolean;
   showNoticeBoardBox?: boolean;
   showToastBox?: boolean;
   showNewPilgrimToast?: boolean;
-  leaderboardMaxRanks?: number;
+  lotusLeaderboardMaxRanks?: number;
+  lotusFloatingScoreFontSize?: number;
   hudOpacity?: number;
   noticeBoardOpacity?: number;
   grandEventOpacity?: number;
-  leaderboardOpacity?: number;
+  lotusLeaderboardOpacity?: number;
   guideOpacity?: number;
   pilgrimCountOpacity?: number;
   toastOpacity?: number;
@@ -120,7 +121,10 @@ export interface GameConfig {
   ttsRate: number;
   ttsPitch: number;
   ttsVolume: number;
+  ttsReverb?: number;
   ttsTemplate: string;
+  maxTtsWords: number;
+  maxTtsQueueSize?: number;
 
   // Nhạc nền, Chuông & Mõ
   bgmEnabled: boolean;
@@ -303,12 +307,15 @@ export interface PilgrimData {
   manualMoveDir?: 'up' | 'down' | 'left' | 'right' | 'idle' | 'wooden_fish';
   woodenFishRippleUntil?: number;
   hasSatOnce?: boolean;
+  pendingGiftCoins?: number;
+  isSimulatedTest?: boolean;
 }
 
 export interface BurnerLotusBurstFX {
   id: string;
   x: number;
   y: number;
+  lotusPoints?: number;
   createdAt: number;
 }
 
@@ -484,7 +491,8 @@ export interface SyncPacket {
     | 'NPC_PRAY_EVENT'
     | 'NEXT_DHARMA'
     | 'CLEAR_TTS_QUEUE'
-    | 'CLEAR_DONORS'
+    | 'UPDATE_LOTUS_DONORS'
+    | 'CLEAR_LOTUS_DONORS'
     | 'UPDATE_CUSTOM_ASSETS'
     | 'REQUEST_FULL_SYNC'
     | 'RESTORE_BACKUP';

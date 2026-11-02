@@ -4,7 +4,6 @@ import {
   DEFAULT_CONFIG,
   DEFAULT_NPC_AVATARS,
   DEFAULT_SPRITESHEETS,
-  INITIAL_DONORS,
   INITIAL_MONKS,
   SAMPLE_NAMES,
   SAMPLE_PRAYERS,
@@ -38,7 +37,12 @@ import {
 import { HudBoxKey } from '../components/stage/StageHud';
 import { ZoneKey } from '../components/stage/GameStage';
 import { inferOfferingTypeFromCoins } from '../components/stage/OfferingModelArt';
-import { EventTtsQueueSnapshot, soundEngine } from '../services/soundEngine';
+import {
+  EventTtsQueueSnapshot,
+  sanitizeAndLimitSpeechText,
+  soundEngine,
+  TTSQueueItemMeta,
+} from '../services/soundEngine';
 import {
   getDefaultCustomWords,
   INITIAL_SAFETY_CATEGORIES,
@@ -56,7 +60,29 @@ const TEMPLE_CONFIG_STORAGE_KEY = 'temple_studio_config_v1';
 const TEMPLE_VIP_SLOTS_STORAGE_KEY = 'temple_vip_slots_v1';
 const TEMPLE_NORMAL_SLOTS_STORAGE_KEY = 'temple_normal_slots_v1';
 const TEMPLE_CUSTOM_ASSETS_STORAGE_KEY = 'temple_custom_assets_v1';
-const TEMPLE_DONORS_STORAGE_KEY = 'temple_donors_v2';
+const TEMPLE_LOTUS_DONORS_STORAGE_KEY = 'temple_lotus_donors_real_only_v1';
+
+const TROLL_SAMPLE_DONOR_NAMES = new Set(
+  ['Châu Tinh Trùng', 'Anh Hùng Bàn Phím', 'Bành Thị Lồng'].map((n) =>
+    n.trim().toLowerCase()
+  )
+);
+
+function isVirtualSampleDonorName(name: string): boolean {
+  return TROLL_SAMPLE_DONOR_NAMES.has((name || '').trim().toLowerCase());
+}
+
+function normalizeCommentForSpamKey(raw: string): string {
+  return String(raw || '')
+    .toLowerCase()
+    .replace(
+      /[\p{Extended_Pictographic}\p{Emoji_Presentation}\u2600-\u27BF\uFE00-\uFE0F\u200D]/gu,
+      ' '
+    )
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 function pickRandomTemplate(list: string[] | undefined, fallback: string): string {
   if (Array.isArray(list)) {
@@ -136,20 +162,25 @@ function sanitizeCustomAssets(
   };
 }
 
-function loadDonorsFromStorage(): DonorEntry[] {
+function loadLotusDonorsFromStorage(): DonorEntry[] {
   try {
-    const raw = localStorage.getItem(TEMPLE_DONORS_STORAGE_KEY);
-    if (!raw) return [...INITIAL_DONORS];
+    const raw = localStorage.getItem(TEMPLE_LOTUS_DONORS_STORAGE_KEY);
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return parsed.filter(
-        (d) => d && typeof d.username === 'string' && typeof d.coins === 'number' && d.coins > 0
+        (d) =>
+          d &&
+          typeof d.username === 'string' &&
+          typeof d.coins === 'number' &&
+          d.coins > 0 &&
+          !isVirtualSampleDonorName(d.username)
       );
     }
   } catch {
     // ignore
   }
-  return [...INITIAL_DONORS];
+  return [];
 }
 
 function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined): GameConfig {
@@ -184,6 +215,10 @@ function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined
   return {
     ...DEFAULT_CONFIG,
     ...raw,
+    maxTtsWords:
+      typeof raw.maxTtsWords === 'number' && raw.maxTtsWords >= 3
+        ? Math.min(100, Math.round(raw.maxTtsWords))
+        : DEFAULT_CONFIG.maxTtsWords ?? 25,
     bgmTracks: safeTracks,
     activeBgmTrackId: activeTrackExists
       ? (raw.activeBgmTrackId as string)
@@ -259,12 +294,12 @@ function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined
           : typeof raw.hudLayout?.hudOpacity === 'number'
           ? raw.hudLayout.hudOpacity
           : DEFAULT_CONFIG.hudLayout.grandEventOpacity,
-      leaderboardOpacity:
-        typeof raw.hudLayout?.leaderboardOpacity === 'number'
-          ? raw.hudLayout.leaderboardOpacity
+      lotusLeaderboardOpacity:
+        typeof raw.hudLayout?.lotusLeaderboardOpacity === 'number'
+          ? raw.hudLayout.lotusLeaderboardOpacity
           : typeof raw.hudLayout?.hudOpacity === 'number'
           ? raw.hudLayout.hudOpacity
-          : DEFAULT_CONFIG.hudLayout.leaderboardOpacity,
+          : DEFAULT_CONFIG.hudLayout.lotusLeaderboardOpacity,
       guideOpacity:
         typeof raw.hudLayout?.guideOpacity === 'number'
           ? raw.hudLayout.guideOpacity
@@ -294,9 +329,9 @@ function mergeGameConfigWithDefaults(raw: Partial<GameConfig> | null | undefined
         ...DEFAULT_CONFIG.hudLayout.templeSign,
         ...(raw.hudLayout?.templeSign || {}),
       },
-      leaderboardBox: {
-        ...DEFAULT_CONFIG.hudLayout.leaderboardBox,
-        ...(raw.hudLayout?.leaderboardBox || {}),
+      lotusLeaderboardBox: {
+        ...DEFAULT_CONFIG.hudLayout.lotusLeaderboardBox,
+        ...(raw.hudLayout?.lotusLeaderboardBox || {}),
       },
       guideBox: {
         ...DEFAULT_CONFIG.hudLayout.guideBox,
@@ -625,12 +660,14 @@ export function useTempleEngine() {
     INITIAL_MONKS.map((m) => ({ ...m }))
   );
   const [queueCount, setQueueCount] = useState(0);
-  const [donors, setDonors] = useState<DonorEntry[]>(() => loadDonorsFromStorage());
+  const [lotusDonors, setLotusDonors] = useState<DonorEntry[]>(() =>
+    loadLotusDonorsFromStorage()
+  );
   const [floatingToasts, setFloatingToasts] = useState<FloatingToastItem[]>([]);
   const [customAssets, setCustomAssets] = useState<CustomAssetsConfig>(() =>
     loadCustomAssetsFromStorage()
   );
-  const [grandEventProgress, setGrandEventProgress] = useState<number>(180);
+  const [grandEventProgress, setGrandEventProgress] = useState<number>(0);
   const [goldenLotusRainUntil, setGoldenLotusRainUntil] = useState<number>(0);
   const [latestAltarOffering, setLatestAltarOffering] =
     useState<OfferingGiftType>('tray');
@@ -691,7 +728,7 @@ export function useTempleEngine() {
   const pilgrimsRef = useRef<PilgrimData[]>([]);
   const monksRef = useRef<TempleMonkData[]>(INITIAL_MONKS.map((m) => ({ ...m })));
   const customAssetsRef = useRef<CustomAssetsConfig>(customAssets);
-  const donorsRef = useRef<DonorEntry[]>(donors);
+  const lotusDonorsRef = useRef<DonorEntry[]>(lotusDonors);
   const prevObsPeersRef = useRef<number>(0);
   const queueRef = useRef<QueuedPilgrimRequest[]>([]);
   const cameraFocusRef = useRef<CameraFocusState>({
@@ -702,7 +739,7 @@ export function useTempleEngine() {
   const cameraQueueRef = useRef<CameraQueueItem[]>([]);
   const nextIdRef = useRef(1);
   const lastBotTtsSecRef = useRef(0);
-  const grandEventProgressRef = useRef(180);
+  const grandEventProgressRef = useRef(0);
   const npcNamesRef = useRef<string[]>(npcNames);
   const npcPrayersRef = useRef<string[]>(npcPrayers);
   const npcAvatarsRef = useRef<string[]>(npcAvatars);
@@ -713,6 +750,23 @@ export function useTempleEngine() {
   const lastAdminSyncReceivedAtRef = useRef<number>(0);
   const pressedKeysRef = useRef<Record<string, boolean>>({});
   const lastBellMsRef = useRef(0);
+  const recentRawEventDedupeRef = useRef<Map<string, number>>(new Map());
+  const recentUserCommentSpamRef = useRef<Map<string, { norm: string; time: number }>>(
+    new Map()
+  );
+  const recentGlobalCommentSpamRef = useRef<Map<string, number>>(new Map());
+  const lastTikTokRoomLikesRef = useRef<number>(0);
+  const likeBurstAccRef = useRef<{
+    accumulatedLikes: number;
+    lastUsername: string;
+    debounceTimer: ReturnType<typeof setTimeout> | null;
+    maxWindowTimer: ReturnType<typeof setTimeout> | null;
+  }>({
+    accumulatedLikes: 0,
+    lastUsername: 'Phật tử',
+    debounceTimer: null,
+    maxWindowTimer: null,
+  });
   const comboSessionRef = useRef<
     Record<
       string,
@@ -777,7 +831,7 @@ export function useTempleEngine() {
     });
 
     // Tự động mở link báo chuông sau 5s khi hoàn thành cập nhật/tải lại trên tab Admin (không chạy trên ?obs=1)
-    const BUILD_NOTIFY_KEY = 'temple_build_done_ring_v4';
+    const BUILD_NOTIFY_KEY = 'temple_build_done_ring_v5';
     let ringTimer: ReturnType<typeof setTimeout> | null = null;
     if (!isObsClient && typeof window !== 'undefined') {
       try {
@@ -936,6 +990,89 @@ export function useTempleEngine() {
     });
     const unsubEventQueue = soundEngine.subscribeEventQueue((snap) => {
       setEventTtsQueue(snap);
+
+      // Đồng bộ Hàng Chờ Camera (cameraQueue) 1:1 theo Hàng Chờ Lời Đọc Sự Kiện (detailedQueue)
+      const mappedQueue: CameraQueueItem[] = (snap.detailedQueue || [])
+        .filter((item) => Boolean(item.meta))
+        .map((item) => ({
+          id: item.id,
+          pilgrimId: item.meta?.pilgrimId ?? -1,
+          username: item.meta?.username || 'Phật tử',
+          reason: item.meta?.reason || 'comment',
+          isBot: Boolean(item.meta?.isBot),
+          holdSec: 0,
+          lockSec: 0,
+          addedAt: item.addedAt,
+        }));
+      cameraQueueRef.current = mappedQueue;
+      setCameraQueue(mappedQueue);
+
+      // LẤY LỜI ĐỌC LÀM CHUẨN: Khi bắt đầu đọc lời cầu nguyện / dâng lễ của ai -> chuyển Camera ngay tới người đó và giữ cho tới khi đọc xong câu đó
+      const cfg = configRef.current;
+      const activeMeta = snap.isPlayingEvent ? snap.activeItem?.meta : undefined;
+      if (activeMeta && (activeMeta.pilgrimId || activeMeta.username)) {
+        const reason = activeMeta.reason || 'comment';
+        const isBot = Boolean(activeMeta.isBot);
+        const canFollow =
+          reason === 'gift' ||
+          reason === 'special_gift' ||
+          reason === 'manual' ||
+          (cfg.cameraFollowCommentEnabled &&
+            ((!isBot && cfg.cameraFollowRealUser) ||
+              (isBot && cfg.cameraFollowNpc)));
+
+        if (canFollow) {
+          const lowerTarget = (activeMeta.username || '').trim().toLowerCase();
+          const matchedPilgrim =
+            pilgrimsRef.current.find(
+              (p) =>
+                p.id === activeMeta.pilgrimId &&
+                p.state !== 'leave_down_exit'
+            ) ||
+            pilgrimsRef.current.find(
+              (p) =>
+                lowerTarget &&
+                p.username.trim().toLowerCase() === lowerTarget &&
+                p.state !== 'leave_down_exit'
+            );
+
+          if (matchedPilgrim) {
+            const bubbleDurMs =
+              Math.max(4, cfg.chatBubbleDurationSec || 12) * 1000;
+            if (matchedPilgrim.hasComment && matchedPilgrim.prayer) {
+              matchedPilgrim.chatBubbleUntil = Date.now() + bubbleDurMs;
+              setPilgrims([...pilgrimsRef.current]);
+            }
+            const nextFocus: CameraFocusState = {
+              pilgrimId: matchedPilgrim.id,
+              username: matchedPilgrim.username,
+              reason,
+              isBot: matchedPilgrim.isBot,
+              startedAt: Date.now(),
+              // Giữ camera theo đúng thời lượng phát giọng đọc TTS (không dùng timer cố định)
+              until: Number.MAX_SAFE_INTEGER,
+              lockedUntil: 0,
+            };
+            cameraFocusRef.current = nextFocus;
+            setCameraFocus(nextFocus);
+          }
+        }
+      } else {
+        // Khi câu đọc vừa kết thúc và không còn câu sự kiện nào đang đọc -> trả Camera về toàn cảnh 1.0x (trừ khi đang khóa thủ công)
+        const curCam = cameraFocusRef.current;
+        if (
+          curCam.pilgrimId !== null &&
+          curCam.until === Number.MAX_SAFE_INTEGER
+        ) {
+          const resetFocus: CameraFocusState = {
+            pilgrimId: null,
+            until: 0,
+            lockedUntil: 0,
+          };
+          cameraFocusRef.current = resetFocus;
+          setCameraFocus(resetFocus);
+        }
+      }
     });
     const unsubDharma = soundEngine.subscribeDharmaArticleChange((nextId) => {
       setConfig((prev) => ({ ...prev, activeDharmaId: nextId }));
@@ -969,7 +1106,7 @@ export function useTempleEngine() {
             npcPrayers: npcPrayersRef.current,
             npcAvatars: npcAvatarsRef.current,
             customAssets: customAssetsRef.current,
-            donors: donorsRef.current,
+            lotusDonors: lotusDonorsRef.current,
             pilgrims: pilgrimsRef.current,
             monks: monksRef.current,
           });
@@ -1005,7 +1142,7 @@ export function useTempleEngine() {
           npcPrayers: npcPrayersRef.current,
           npcAvatars: npcAvatarsRef.current,
           customAssets: customAssetsRef.current,
-          donors: donorsRef.current,
+          lotusDonors: lotusDonorsRef.current,
           pilgrims: pilgrimsRef.current,
           monks: monksRef.current,
         });
@@ -1081,13 +1218,19 @@ export function useTempleEngine() {
     []
   );
 
-  const spawnBurnerLotusBurst = useCallback((x: number, y: number) => {
-    const id = `burner-burst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-    setBurnerLotusBursts((prev) => [...prev.slice(-5), { id, x, y, createdAt: Date.now() }]);
-    setTimeout(() => {
-      setBurnerLotusBursts((prev) => prev.filter((b) => b.id !== id));
-    }, 1000);
-  }, []);
+  const spawnBurnerLotusBurst = useCallback(
+    (x: number, y: number, lotusPoints?: number) => {
+      const id = `burner-burst-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setBurnerLotusBursts((prev) => [
+        ...prev.slice(-5),
+        { id, x, y, lotusPoints, createdAt: Date.now() },
+      ]);
+      setTimeout(() => {
+        setBurnerLotusBursts((prev) => prev.filter((b) => b.id !== id));
+      }, 1800);
+    },
+    []
+  );
 
   const activateGrandEventCelebration = useCallback(() => {
     const until = Date.now() + 10000;
@@ -1096,35 +1239,43 @@ export function useTempleEngine() {
   }, [pushFloatingToast]);
 
   const addGrandEventLotus = useCallback(
-    (amount: number) => {
+    (amount: number, fromRemoteSync = false) => {
       const target = Math.max(1, configRef.current.grandEventTarget || 1000);
       const nextTotal = grandEventProgressRef.current + Math.max(1, amount);
       // Kích hoạt nháy viền hồng 1 cái trên thanh đếm ngay thời điểm bông sen chạm thẻ Sự kiện Đại lễ
       setEventBarFlashKey(Date.now() + Math.random());
 
+      let didCelebrate = false;
       if (nextTotal >= target) {
         const remainder = nextTotal % target;
         grandEventProgressRef.current = remainder;
         setGrandEventProgress(remainder);
         activateGrandEventCelebration();
+        didCelebrate = true;
       } else {
         grandEventProgressRef.current = nextTotal;
         setGrandEventProgress(nextTotal);
+      }
+
+      if (!fromRemoteSync) {
+        syncService.sendCommand('SYNC_GRAND_EVENT', {
+          progress: grandEventProgressRef.current,
+          celebrate: didCelebrate,
+        });
       }
     },
     [activateGrandEventCelebration]
   );
 
   const spawnFlyingLotusToEventBoard = useCallback(
-    (startX: number, startY: number, lotusAmount = 0) => {
+    (startX: number, startY: number, lotusAmount = 0, fromRemoteSync = false) => {
       const cfg = configRef.current;
       const maxFly = Math.max(0, cfg.maxFlyingLotuses ?? 5);
 
       if (maxFly <= 0) {
-        // Khi giới hạn hoa bay = 0 (Tắt hoa bay): vẫn cộng điểm sau 0.3s nhưng không vẽ hoa bay lên màn hình
         if (lotusAmount > 0) {
           setTimeout(() => {
-            addGrandEventLotus(lotusAmount);
+            addGrandEventLotus(lotusAmount, fromRemoteSync);
           }, 300);
         }
         return;
@@ -1135,18 +1286,18 @@ export function useTempleEngine() {
       const id = `fly-lotus-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
       setFlyingLotuses((prev) => {
-        if (prev.length >= maxFly) return prev; // Giới hạn số hoa sen bay hiển thị cùng lúc
+        const trimmed = prev.length >= maxFly ? prev.slice(-(maxFly - 1)) : prev;
         return [
-          ...prev,
+          ...trimmed,
           { id, startX, startY, targetX, targetY, createdAt: Date.now() },
         ];
       });
 
-      // Khi bông hoa sen bay từ chậm rồi tăng tốc chạm vào thẻ Sự kiện Đại lễ (~1.62s) thì mới cộng điểm & highlight thanh đếm
+      // Khi bông hoa sen bay chạm vào thẻ Sự kiện Đại lễ (~1.62s) thì cộng toàn bộ số lượng tích lũy vào thanh sự kiện
       setTimeout(() => {
         setFlyingLotuses((prev) => prev.filter((f) => f.id !== id));
         if (lotusAmount > 0) {
-          addGrandEventLotus(lotusAmount);
+          addGrandEventLotus(lotusAmount, fromRemoteSync);
         }
       }, 1620);
     },
@@ -1154,50 +1305,36 @@ export function useTempleEngine() {
   );
 
   const triggerHeadLotusBurst = useCallback(
-    (username?: string, burstCount = 1, lotusAmount = 0) => {
+    (
+      username?: string,
+      burstCount = 1,
+      lotusAmount = 0,
+      fromRemoteSync = false
+    ) => {
       const list = pilgrimsRef.current;
       const now = Date.now();
       const maxFly = Math.max(0, configRef.current.maxFlyingLotuses ?? 5);
 
       if (maxFly <= 0) {
-        spawnFlyingLotusToEventBoard(270, 760, lotusAmount);
+        spawnFlyingLotusToEventBoard(270, 760, lotusAmount, fromRemoteSync);
         return;
       }
 
       if (list.length === 0) {
-        // Nếu chưa có nhân vật nào trên sân thì vẫn cho 1 hoa sen vừa bay từ thảm đỏ về bảng Đại lễ
-        spawnFlyingLotusToEventBoard(270, 760, lotusAmount);
+        spawnFlyingLotusToEventBoard(270, 760, lotusAmount, fromRemoteSync);
         return;
       }
 
-      const activeBursts = list.filter(
-        (p) => p.lotusBurstUntil && p.lotusBurstUntil > now
-      ).length;
-      if (activeBursts >= maxFly) {
-        const fallback = list[Math.floor(Math.random() * list.length)];
-        spawnFlyingLotusToEventBoard(fallback.x, fallback.y - 36, lotusAmount);
-        return;
-      }
-
-      const maxNew = Math.min(burstCount, maxFly - activeBursts);
       const lowerName = (username || '').trim().toLowerCase();
-
       const candidates: PilgrimData[] = [];
       if (lowerName) {
-        const exact = list.find(
-          (p) =>
-            p.username.toLowerCase() === lowerName &&
-            (!p.lotusBurstUntil || now - (p.lotusBurstUntil - 2100) > 1000)
-        );
+        const exact = list.find((p) => p.username.toLowerCase() === lowerName);
         if (exact) candidates.push(exact);
       }
 
+      const maxNew = Math.max(1, Math.min(burstCount, maxFly));
       while (candidates.length < maxNew) {
-        const available = list.filter(
-          (p) =>
-            !candidates.includes(p) &&
-            (!p.lotusBurstUntil || now - (p.lotusBurstUntil - 2100) > 1000)
-        );
+        const available = list.filter((p) => !candidates.includes(p));
         if (available.length === 0) break;
         const pick = available[Math.floor(Math.random() * available.length)];
         candidates.push(pick);
@@ -1205,30 +1342,50 @@ export function useTempleEngine() {
 
       if (candidates.length > 0) {
         candidates.forEach((p, idx) => {
-          // Bông hoa bay lên trên đầu nhân vật (~2.1s)
           p.lotusBurstUntil = now + 2150;
           p.lotusBurstKey = now + Math.random();
-          // Bông hoa sen bay từ nhân vật (từ chậm rồi nhanh dần) về chạm vào bảng Sự kiện đại lễ mới highlight thanh đếm
-          if (idx === 0) {
-            spawnFlyingLotusToEventBoard(p.x, p.y - 36, lotusAmount);
+          if (idx === 0 && lotusAmount > 0) {
+            spawnFlyingLotusToEventBoard(
+              p.x,
+              p.y - 36,
+              lotusAmount,
+              fromRemoteSync
+            );
           }
         });
         setPilgrims([...list]);
-      } else {
+      } else if (lotusAmount > 0) {
         const fallback = list[Math.floor(Math.random() * list.length)];
-        spawnFlyingLotusToEventBoard(fallback.x, fallback.y - 36, lotusAmount);
+        spawnFlyingLotusToEventBoard(
+          fallback.x,
+          fallback.y - 36,
+          lotusAmount,
+          fromRemoteSync
+        );
       }
     },
     [spawnFlyingLotusToEventBoard]
   );
 
-  const addDonorCoins = useCallback((username: string, coins: number) => {
+  const addLotusDonorHearts = useCallback((username: string, hearts: number) => {
     const cleanName = (username || '').trim();
-    const added = Math.max(0, Number(coins) || 0);
-    if (!cleanName || added <= 0) return;
+    const added = Math.max(0, Number(hearts) || 0);
+    if (
+      !cleanName ||
+      added <= 0 ||
+      cleanName.toLowerCase() === 'phật tử' ||
+      isVirtualSampleDonorName(cleanName)
+    ) {
+      return;
+    }
     const lower = cleanName.toLowerCase();
+    const isObsClient =
+      typeof window !== 'undefined' &&
+      (new URLSearchParams(window.location.search).get('obs') === '1' ||
+        new URLSearchParams(window.location.search).get('view') === 'live' ||
+        new URLSearchParams(window.location.search).get('mode') === 'live');
 
-    setDonors((prev) => {
+    setLotusDonors((prev) => {
       const existing = prev.find((d) => d.username.trim().toLowerCase() === lower);
       const next = existing
         ? prev.map((d) =>
@@ -1237,31 +1394,105 @@ export function useTempleEngine() {
               : d
           )
         : [...prev, { username: cleanName, coins: added }];
+      lotusDonorsRef.current = next;
       try {
-        localStorage.setItem(TEMPLE_DONORS_STORAGE_KEY, JSON.stringify(next));
+        localStorage.setItem(TEMPLE_LOTUS_DONORS_STORAGE_KEY, JSON.stringify(next));
       } catch {
         // ignore storage error
+      }
+      if (!isObsClient) {
+        syncService.sendCommand('UPDATE_LOTUS_DONORS', { lotusDonors: next });
       }
       return next;
     });
   }, []);
 
-  const handleClearDonors = useCallback(() => {
-    setDonors([]);
+  const handleClearLotusDonors = useCallback(() => {
+    lotusDonorsRef.current = [];
+    setLotusDonors([]);
     try {
-      localStorage.removeItem(TEMPLE_DONORS_STORAGE_KEY);
+      localStorage.removeItem(TEMPLE_LOTUS_DONORS_STORAGE_KEY);
     } catch {
       // ignore
     }
-    syncService.sendCommand('CLEAR_DONORS', {});
-    pushFloatingToast('🧹 Đã làm mới Bảng Công Đức!', false);
+    syncService.sendCommand('CLEAR_LOTUS_DONORS', {});
+    pushFloatingToast('🧹 Đã xóa dữ liệu cũ & làm mới Bảng Hoa Sen!', false);
   }, [pushFloatingToast]);
 
   /**
-   * Hệ thống Camera thông minh (Pan & Zoom mượt mà):
-   * - Chế độ theo dõi comment (bật/tắt + tích chọn Người thật / NPC): Đưa vào hàng chờ di chuyển camera hoặc khóa ngay nếu camera đang rảnh.
-   * - Chế độ đẩy (Push mode): Khi có người dâng lễ (gift / special_gift) -> skip camera hiện tại ngay lập tức để chuyển sang người dâng lễ.
-   * - Với Lễ Đặc Biệt (10+ xu): Khóa camera tối thiểu cameraSpecialGiftLockSec (mặc định 3s) trước khi chuyển sang mục tiêu kế tiếp.
+   * HỆ THỐNG GOM BÃO TIM (LIKE BURST ACCUMULATOR):
+   * - Khi khán giả thả tim liên tục (bấm nhiều lần hoặc gửi nhiều gói tin trong vài giây),
+   *   hệ thống cộng dồn toàn bộ số lượng tim trong cửa sổ ~2.2 giây (tối đa 4.2 giây nếu bấm liên hoàn không nghỉ)
+   *   rồi mới phóng Hoa Sen Đại Lễ mang tổng số tim cộng thẳng vào thanh Sự Kiện Đại Lễ.
+   */
+  const accumulateLikeBurst = useCallback(
+    (count = 1, username?: string, fromRemoteSync = false) => {
+      const added = Math.max(1, Number(count) || 1);
+      const uname = (username || '').trim() || 'Phật tử';
+      const acc = likeBurstAccRef.current;
+
+      if (!fromRemoteSync && username && username.trim()) {
+        addLotusDonorHearts(uname, added);
+      }
+
+      acc.accumulatedLikes += added;
+      if (username && username.trim()) {
+        acc.lastUsername = uname;
+      }
+
+      // Hiển thị hiệu ứng nở hoa sen trên đầu nhân vật ngay khi bấm tim nhưng chưa cộng điểm lẻ tẻ
+      triggerHeadLotusBurst(uname, 1, 0, true);
+
+      pushFloatingToast(
+        `💗 Đang gom bão tim (${acc.lastUsername}): +${acc.accumulatedLikes} Hoa Sen...`,
+        false,
+        'like-burst-accumulating'
+      );
+
+      const flushNow = () => {
+        if (acc.debounceTimer) {
+          clearTimeout(acc.debounceTimer);
+          acc.debounceTimer = null;
+        }
+        if (acc.maxWindowTimer) {
+          clearTimeout(acc.maxWindowTimer);
+          acc.maxWindowTimer = null;
+        }
+        const totalToCommit = acc.accumulatedLikes;
+        const finalUser = acc.lastUsername || uname;
+        acc.accumulatedLikes = 0;
+        if (totalToCommit <= 0) return;
+
+        pushFloatingToast(
+          `🌸 ${finalUser} thả +${totalToCommit} Hoa Sen vào Sự Kiện Đại Lễ!`,
+          totalToCommit >= 20,
+          'like-burst-accumulating'
+        );
+
+        triggerHeadLotusBurst(
+          finalUser,
+          totalToCommit >= 50 ? 4 : totalToCommit >= 10 ? 2 : 1,
+          totalToCommit,
+          fromRemoteSync
+        );
+      };
+
+      if (acc.debounceTimer) {
+        clearTimeout(acc.debounceTimer);
+      }
+      acc.debounceTimer = setTimeout(flushNow, 2200);
+
+      if (!acc.maxWindowTimer) {
+        acc.maxWindowTimer = setTimeout(flushNow, 4200);
+      }
+    },
+    [addLotusDonorHearts, pushFloatingToast, triggerHeadLotusBurst]
+  );
+
+  /**
+   * Hệ thống Camera đồng bộ theo lời đọc (TTS-Driven Camera):
+   * - Khi có lời đọc TTS, Camera tự động chuyển theo sự kiện subscribeEventQueue của soundEngine (lấy lời đọc làm chuẩn).
+   * - Hàm requestCameraFocus chỉ dùng khi người dùng bấm Zoom thủ công (forceNow) hoặc khi sự kiện không phát âm thanh TTS.
    */
   const requestCameraFocus = useCallback(
     (item: {
@@ -1270,119 +1501,42 @@ export function useTempleEngine() {
       reason: CameraFocusReason;
       isBot: boolean;
       forceNow?: boolean;
+       fallbackWhenNoTts?: boolean;
     }) => {
       const cfg = configRef.current;
       const now = Date.now();
-      const holdMs = Math.max(1, cfg.cameraHoldDurationSec || 5) * 1000;
-      const specialLockMs = Math.max(1, cfg.cameraSpecialGiftLockSec || 3) * 1000;
-      const isGift = item.reason === 'gift' || item.reason === 'special_gift';
 
-      // Kiểm tra bộ lọc chế độ theo dõi comment
+      if (!item.forceNow && !item.fallbackWhenNoTts) {
+        return;
+      }
+
       if (item.reason === 'comment' && !item.forceNow) {
         if (!cfg.cameraFollowCommentEnabled) return;
         if (!item.isBot && !cfg.cameraFollowRealUser) return;
         if (item.isBot && !cfg.cameraFollowNpc) return;
       }
 
+      // Nếu đang đọc TTS cho người khác mà đây chỉ là fallback không TTS thì không giành camera của người đang được đọc
       const cur = cameraFocusRef.current;
-      const isCurrentlyActive = cur.pilgrimId !== null && now < cur.until;
-      const isLockedBySpecialGift =
-        isCurrentlyActive && Boolean(cur.lockedUntil && now < cur.lockedUntil);
-
-      // Nếu camera đang khóa đúng nhân vật này -> gia hạn hoặc nâng cấp lý do khóa
-      if (isCurrentlyActive && cur.pilgrimId === item.pilgrimId) {
-        const nextFocus: CameraFocusState = {
-          pilgrimId: item.pilgrimId,
-          username: item.username,
-          reason:
-            item.reason === 'special_gift' || cur.reason === 'special_gift'
-              ? 'special_gift'
-              : isGift
-              ? 'gift'
-              : item.reason,
-          isBot: item.isBot,
-          until: now + holdMs,
-          lockedUntil:
-            item.reason === 'special_gift'
-              ? now + specialLockMs
-              : cur.lockedUntil && cur.lockedUntil > now
-              ? cur.lockedUntil
-              : 0,
-        };
-        cameraFocusRef.current = nextFocus;
-        setCameraFocus(nextFocus);
+      if (
+        !item.forceNow &&
+        cur.pilgrimId !== null &&
+        cur.until === Number.MAX_SAFE_INTEGER
+      ) {
         return;
       }
 
-      // Chế độ đẩy (Push Mode): Khi có người dâng lễ (và camera hiện tại không bị khóa cứng 3s bởi lễ đặc biệt) -> skip camera hiện tại ngay tức khắc
-      const shouldFocusImmediately =
-        Boolean(item.forceNow) ||
-        !isCurrentlyActive ||
-        (isGift && cfg.cameraPushOnGiftEnabled && !isLockedBySpecialGift);
-
-      if (shouldFocusImmediately) {
-        cameraQueueRef.current = cameraQueueRef.current.filter(
-          (q) => q.pilgrimId !== item.pilgrimId
-        );
-        setCameraQueue([...cameraQueueRef.current]);
-
-        const nextFocus: CameraFocusState = {
-          pilgrimId: item.pilgrimId,
-          username: item.username,
-          reason: item.reason,
-          isBot: item.isBot,
-          until: now + holdMs,
-          lockedUntil: item.reason === 'special_gift' ? now + specialLockMs : 0,
-        };
-        cameraFocusRef.current = nextFocus;
-        setCameraFocus(nextFocus);
-        return;
-      }
-
-      // Đưa vào hàng chờ di chuyển camera (Camera Queue)
-      const existingIdx = cameraQueueRef.current.findIndex(
-        (q) => q.pilgrimId === item.pilgrimId
-      );
-      const queueEntry: CameraQueueItem = {
-        id: `cam-${now}-${Math.random().toString(36).slice(2, 6)}`,
+      const nextFocus: CameraFocusState = {
         pilgrimId: item.pilgrimId,
         username: item.username,
         reason: item.reason,
         isBot: item.isBot,
-        createdAt: now,
+        startedAt: now,
+        until: item.forceNow ? now + 8000 : now + 3800,
+        lockedUntil: 0,
       };
-
-      if (existingIdx !== -1) {
-        const prev = cameraQueueRef.current[existingIdx];
-        cameraQueueRef.current[existingIdx] = {
-          ...prev,
-          username: item.username,
-          reason:
-            item.reason === 'special_gift' || prev.reason === 'special_gift'
-              ? 'special_gift'
-              : isGift || prev.reason === 'gift'
-              ? 'gift'
-              : item.reason,
-        };
-      } else if (isGift) {
-        // Ưu tiên người dâng lễ lên đầu hàng chờ (ngay sau các lễ đặc biệt/dâng lễ trước đó)
-        let insertAt = 0;
-        while (
-          insertAt < cameraQueueRef.current.length &&
-          (cameraQueueRef.current[insertAt].reason === 'special_gift' ||
-            cameraQueueRef.current[insertAt].reason === 'gift')
-        ) {
-          insertAt++;
-        }
-        cameraQueueRef.current.splice(insertAt, 0, queueEntry);
-      } else {
-        cameraQueueRef.current.push(queueEntry);
-      }
-
-      if (cameraQueueRef.current.length > 30) {
-        cameraQueueRef.current = cameraQueueRef.current.slice(0, 30);
-      }
-      setCameraQueue([...cameraQueueRef.current]);
+      cameraFocusRef.current = nextFocus;
+      setCameraFocus(nextFocus);
     },
     []
   );
@@ -1406,6 +1560,7 @@ export function useTempleEngine() {
         giftName?: string;
         hasComment?: boolean;
         isCarryingGift?: boolean;
+        isSimulatedTest?: boolean;
       },
       slot: KneelSlot | null,
       instantKneel = false
@@ -1462,6 +1617,8 @@ export function useTempleEngine() {
         hasComment,
         isBot: req.isBot,
         coins: req.coins,
+        pendingGiftCoins: isCarryingGift ? Math.max(1, req.coins) : 0,
+        isSimulatedTest: Boolean(req.isSimulatedTest),
         offeringType: inferOfferingTypeFromCoins(isVip, req.coins),
         comboCount: req.comboCount,
         giftName: req.giftName,
@@ -1526,7 +1683,7 @@ export function useTempleEngine() {
         ...prev,
         prayer: req.prayer || prev.prayer,
         isVip: prev.isVip || req.isVip || req.coins > 0,
-        coins: Math.max(prev.coins, req.coins),
+        coins: (prev.coins || 0) + (req.coins || 0),
         avatarUrl: req.avatarUrl || prev.avatarUrl,
         comboCount: Math.max(prev.comboCount || 1, req.comboCount || 1),
         giftName: req.giftName || prev.giftName,
@@ -1565,6 +1722,7 @@ export function useTempleEngine() {
       broadcastSync?: boolean;
       fromSync?: boolean;
       fromTikTokWs?: boolean;
+      isSimulatedTest?: boolean;
     }) => {
       const {
         username,
@@ -1581,6 +1739,7 @@ export function useTempleEngine() {
         broadcastSync = false,
         fromSync = false,
         fromTikTokWs = false,
+        isSimulatedTest = false,
       } = opts;
 
       const isGiftAction = coins > 0 || (!isBot && rawVip && coins > 0);
@@ -1589,6 +1748,92 @@ export function useTempleEngine() {
         rawHasComment !== undefined
           ? rawHasComment
           : !isGiftAction && Boolean((prayer || '').trim()) && !isBot;
+
+      const nowMs = Date.now();
+      const cfg = configRef.current;
+
+      // 1. Chống nhân đôi sự kiện khi mạng lag hoặc nhận trùng từ cả WS và Sync trong 2.2 giây
+      if (!isBot && (fromTikTokWs || fromSync) && coins <= 0) {
+        const rawDedupeKey = `${(username || '').trim().toLowerCase()}|${(
+          prayer || ''
+        )
+          .trim()
+          .toLowerCase()}|${coins}`;
+        const prevRawAt = recentRawEventDedupeRef.current.get(rawDedupeKey);
+        if (prevRawAt && nowMs - prevRawAt < 2200) {
+          return;
+        }
+        recentRawEventDedupeRef.current.set(rawDedupeKey, nowMs);
+        if (recentRawEventDedupeRef.current.size > 300) {
+          for (const [k, t] of recentRawEventDedupeRef.current.entries()) {
+            if (nowMs - t > 10000) recentRawEventDedupeRef.current.delete(k);
+          }
+        }
+      }
+
+      // 2. BỘ LỌC CHỐNG SPAM LẶP LẠI 1 CÂU GIỐNG NHAU & SPAM ICON:
+      // Nếu người thật gửi comment mà chỉ toàn icon hoặc lặp lại câu giống nhau -> skip qua comment đó ngay
+      if (!isBot && coins <= 0 && hasComment && !fromSync) {
+        const normSpamKey = normalizeCommentForSpamKey(prayer);
+        const lowerUserKey = (username || '').trim().toLowerCase();
+
+        if (!normSpamKey) {
+          setSafetyLogs((prev) =>
+            [
+              {
+                id: `spam-icon-${nowMs}-${Math.random().toString(36).slice(2, 6)}`,
+                time: new Date().toLocaleTimeString('vi-VN'),
+                user: username || 'Khách',
+                detail: `[Skip Spam Icon]: "${prayer}"`,
+              },
+              ...prev,
+            ].slice(0, 35)
+          );
+          return;
+        }
+
+        const prevUserEntry = recentUserCommentSpamRef.current.get(lowerUserKey);
+        if (
+          prevUserEntry &&
+          prevUserEntry.norm === normSpamKey &&
+          nowMs - prevUserEntry.time < 120000
+        ) {
+          setSafetyLogs((prev) =>
+            [
+              {
+                id: `spam-dup-user-${nowMs}-${Math.random().toString(36).slice(2, 6)}`,
+                time: new Date().toLocaleTimeString('vi-VN'),
+                user: username || 'Khách',
+                detail: `[Skip Lặp Câu Cũ]: "${prayer}"`,
+              },
+              ...prev,
+            ].slice(0, 35)
+          );
+          return;
+        }
+
+        const prevGlobalAt = recentGlobalCommentSpamRef.current.get(normSpamKey);
+        if (prevGlobalAt && nowMs - prevGlobalAt < 25000) {
+          setSafetyLogs((prev) =>
+            [
+              {
+                id: `spam-dup-room-${nowMs}-${Math.random().toString(36).slice(2, 6)}`,
+                time: new Date().toLocaleTimeString('vi-VN'),
+                user: username || 'Khách',
+                detail: `[Skip Spam Trùng Câu Phòng]: "${prayer}"`,
+              },
+              ...prev,
+            ].slice(0, 35)
+          );
+          return;
+        }
+
+        recentUserCommentSpamRef.current.set(lowerUserKey, {
+          norm: normSpamKey,
+          time: nowMs,
+        });
+        recentGlobalCommentSpamRef.current.set(normSpamKey, nowMs);
+      }
 
       if (broadcastSync && !fromSync) {
         syncService.sendCommand('SPAWN_PILGRIM', {
@@ -1604,10 +1849,10 @@ export function useTempleEngine() {
           isBot,
           hasComment,
           fromTikTokWs,
+          isSimulatedTest,
         });
       }
 
-      const cfg = configRef.current;
       const { actionMode, categories, customWords: cWords } = safetyRef.current;
 
       const filterRes = isBot
@@ -1627,9 +1872,12 @@ export function useTempleEngine() {
       if (!filterRes.allowed) return;
 
       const finalUsername = filterRes.safeUsername;
-      const finalPrayer = filterRes.safePrayer;
+      const maxWordsLimit = Math.max(3, Number(cfg.maxTtsWords) || 25);
+      const finalPrayer = isBot
+        ? filterRes.safePrayer
+        : sanitizeAndLimitSpeechText(filterRes.safePrayer, maxWordsLimit) ||
+          filterRes.safePrayer;
       const lowerName = finalUsername.trim().toLowerCase();
-      const nowMs = Date.now();
       const nowSec = performance.now() / 1000;
 
       // Xử lý gộp Combo thông minh
@@ -1645,10 +1893,16 @@ export function useTempleEngine() {
           ? 'Bắn tim'
           : 'Hoa hồng');
 
+      const isAlreadyInHallBeforeSpawn = pilgrimsRef.current.some(
+        (p) =>
+          p.username.trim().toLowerCase() === lowerName &&
+          p.state !== 'leave_side_to_aisle' &&
+          p.state !== 'leave_down_exit'
+      );
+
       if (!isBot && coins > 0) {
         const addedCoins = Math.max(1, coins);
         const addedCount = Math.max(1, rawComboCount || 1);
-        addDonorCoins(finalUsername, addedCoins);
 
         const prevSession = comboSessionRef.current[lowerName];
         const isContinuingCombo =
@@ -1689,87 +1943,20 @@ export function useTempleEngine() {
 
         pushFloatingToast(toastMsg, true, `combo:${lowerName}`);
 
-        let ttsTimer: ReturnType<typeof setTimeout> | null = null;
-        if (filterRes.allowTTS) {
-          const debounceMs = addedCount >= 10 ? 220 : 750;
-          ttsTimer = setTimeout(() => {
-            const latestCfg = configRef.current;
-            const speechParts: string[] = [];
-
-            if (latestCfg.realGiftTtsEnabled) {
-              const tpl = pickRandomTemplate(
-                latestCfg.giftTtsTemplates,
-                latestCfg.realGiftTtsTemplate ||
-                  'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe'
-              );
-              speechParts.push(
-                soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
-              );
-            }
-            if (latestCfg.realPrayerTtsEnabled && finalPrayer) {
-              const tpl = pickRandomTemplate(
-                latestCfg.prayerTtsTemplates,
-                latestCfg.realPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'
-              );
-              speechParts.push(
-                soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
-              );
-            }
-
-            if (speechParts.length > 0) {
-              soundEngine.enqueueTTS(speechParts.join('. '), true, latestCfg);
-            }
-          }, debounceMs);
-        }
-
         comboSessionRef.current[lowerName] = {
           count: nextCount,
           totalCoins: nextTotalCoins,
           giftName: effectiveGiftName,
           lastAt: nowMs,
           zoomedHighTier: wasZoomed || shouldZoom,
-          ttsTimer,
+          ttsTimer: null,
         };
       } else if (!isBot) {
         if (cfg.hudLayout.showNewPilgrimToast !== false) {
           pushFloatingToast(`${finalUsername} vào chùa cầu an`, false);
         }
         if (playSound) soundEngine.playWoodenFish(cfg.ttsVolume);
-
-        if (filterRes.allowTTS) {
-          const isAlreadyInHall = pilgrimsRef.current.some(
-            (p) =>
-              p.username.trim().toLowerCase() === lowerName &&
-              p.state !== 'leave_side_to_aisle' &&
-              p.state !== 'leave_down_exit'
-          );
-          const speechParts: string[] = [];
-
-          if (!isAlreadyInHall && cfg.realWelcomeTtsEnabled) {
-            const tpl = pickRandomTemplate(
-              cfg.welcomeTtsTemplates,
-              cfg.realWelcomeTtsTemplate || 'Chào mừng [Tên] đến kim thiền tự'
-            );
-            speechParts.push(
-              soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
-            );
-          }
-          if (cfg.realPrayerTtsEnabled && hasComment && finalPrayer) {
-            const tpl = pickRandomTemplate(
-              cfg.prayerTtsTemplates,
-              cfg.realPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'
-            );
-            speechParts.push(
-              soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
-            );
-          }
-
-          if (speechParts.length > 0) {
-            soundEngine.enqueueTTS(speechParts.join('. '), false, cfg);
-          }
-        }
       } else {
-        // Sự kiện "NPC"
         if (coins > 0) {
           const npcOfferingLabel =
             coins > 10
@@ -1781,6 +1968,148 @@ export function useTempleEngine() {
               : 'Hoa Sen Hồng';
           pushFloatingToast(`${finalUsername} dâng ${npcOfferingLabel}`, true);
         }
+      }
+
+      // Hàm nội bộ gắn lời đọc TTS kèm đúng ID nhân vật (pilgrimId) để Camera chuyển 1:1 theo đúng thời điểm phát lời đọc
+      const scheduleSpeechAndCameraForPilgrim = (targetPilgrimId: number) => {
+        const reason: CameraFocusReason =
+          effectiveCoins >= 10
+            ? 'special_gift'
+            : coins > 0
+            ? 'gift'
+            : 'comment';
+        const meta: TTSQueueItemMeta = {
+          pilgrimId: targetPilgrimId,
+          username: finalUsername,
+          reason,
+          isBot,
+        };
+
+        if (!isBot && coins > 0) {
+          if (filterRes.allowTTS) {
+            const addedCount = Math.max(1, rawComboCount || 1);
+            const debounceMs = addedCount >= 10 ? 220 : 650;
+            const curSession = comboSessionRef.current[lowerName];
+            if (curSession?.ttsTimer) {
+              clearTimeout(curSession.ttsTimer);
+            }
+            const timer = setTimeout(() => {
+              const latestCfg = configRef.current;
+              const speechParts: string[] = [];
+
+              if (latestCfg.realGiftTtsEnabled) {
+                const tpl = pickRandomTemplate(
+                  latestCfg.giftTtsTemplates,
+                  latestCfg.realGiftTtsTemplate ||
+                    'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe'
+                );
+                speechParts.push(
+                  soundEngine.formatEventTemplate(
+                    tpl,
+                    finalUsername,
+                    finalPrayer,
+                    latestCfg.maxTtsWords
+                  )
+                );
+              }
+              if (latestCfg.realPrayerTtsEnabled && finalPrayer) {
+                const tpl = pickRandomTemplate(
+                  latestCfg.prayerTtsTemplates,
+                  latestCfg.realPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'
+                );
+                speechParts.push(
+                  soundEngine.formatEventTemplate(
+                    tpl,
+                    finalUsername,
+                    finalPrayer,
+                    latestCfg.maxTtsWords
+                  )
+                );
+              }
+
+              if (speechParts.length > 0) {
+                soundEngine.enqueueTTS(
+                  speechParts.join('. '),
+                  true,
+                  latestCfg,
+                  meta
+                );
+              } else {
+                requestCameraFocus({
+                  pilgrimId: targetPilgrimId,
+                  username: finalUsername,
+                  reason,
+                  isBot: false,
+                  fallbackWhenNoTts: true,
+                });
+              }
+            }, debounceMs);
+            if (curSession) {
+              curSession.ttsTimer = timer;
+            }
+          } else {
+            requestCameraFocus({
+              pilgrimId: targetPilgrimId,
+              username: finalUsername,
+              reason,
+              isBot: false,
+              fallbackWhenNoTts: true,
+            });
+          }
+          return;
+        }
+
+        if (!isBot) {
+          let enqueuedAny = false;
+          if (filterRes.allowTTS) {
+            const speechParts: string[] = [];
+            if (!isAlreadyInHallBeforeSpawn && cfg.realWelcomeTtsEnabled) {
+              const tpl = pickRandomTemplate(
+                cfg.welcomeTtsTemplates,
+                cfg.realWelcomeTtsTemplate || 'Chào mừng [Tên] đến kim thiền tự'
+              );
+              speechParts.push(
+                soundEngine.formatEventTemplate(
+                  tpl,
+                  finalUsername,
+                  finalPrayer,
+                  cfg.maxTtsWords
+                )
+              );
+            }
+            if (cfg.realPrayerTtsEnabled && hasComment && finalPrayer) {
+              const tpl = pickRandomTemplate(
+                cfg.prayerTtsTemplates,
+                cfg.realPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'
+              );
+              speechParts.push(
+                soundEngine.formatEventTemplate(
+                  tpl,
+                  finalUsername,
+                  finalPrayer,
+                  cfg.maxTtsWords
+                )
+              );
+            }
+            if (speechParts.length > 0) {
+              enqueuedAny = true;
+              soundEngine.enqueueTTS(speechParts.join('. '), false, cfg, meta);
+            }
+          }
+          if (!enqueuedAny && hasComment) {
+            requestCameraFocus({
+              pilgrimId: targetPilgrimId,
+              username: finalUsername,
+              reason: 'comment',
+              isBot: false,
+              fallbackWhenNoTts: true,
+            });
+          }
+          return;
+        }
+
+        // Sự kiện NPC
+        let enqueuedNpc = false;
         if (!soundEngine.getBusyState() && nowSec - lastBotTtsSecRef.current > 6) {
           const npcSpeechParts: string[] = [];
           if (coins > 0) {
@@ -1791,7 +2120,12 @@ export function useTempleEngine() {
                   'Cảm ơn [Tên] đã dâng lễ vật, chúc bạn và gia đình bình an và sức khỏe'
               );
               npcSpeechParts.push(
-                soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
+                soundEngine.formatEventTemplate(
+                  tpl,
+                  finalUsername,
+                  finalPrayer,
+                  cfg.maxTtsWords
+                )
               );
             }
             if (cfg.npcPrayerTtsEnabled && hasComment && finalPrayer) {
@@ -1800,7 +2134,12 @@ export function useTempleEngine() {
                 cfg.npcPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'
               );
               npcSpeechParts.push(
-                soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
+                soundEngine.formatEventTemplate(
+                  tpl,
+                  finalUsername,
+                  finalPrayer,
+                  cfg.maxTtsWords
+                )
               );
             }
           } else {
@@ -1810,7 +2149,12 @@ export function useTempleEngine() {
                 cfg.npcWelcomeTtsTemplate || 'Chào mừng [Tên] đến kim thiền tự'
               );
               npcSpeechParts.push(
-                soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
+                soundEngine.formatEventTemplate(
+                  tpl,
+                  finalUsername,
+                  finalPrayer,
+                  cfg.maxTtsWords
+                )
               );
             }
             if (cfg.npcPrayerTtsEnabled && hasComment && finalPrayer) {
@@ -1819,17 +2163,32 @@ export function useTempleEngine() {
                 cfg.npcPrayerTtsTemplate || '[Tên] cầu nguyện: [Comment]'
               );
               npcSpeechParts.push(
-                soundEngine.formatEventTemplate(tpl, finalUsername, finalPrayer)
+                soundEngine.formatEventTemplate(
+                  tpl,
+                  finalUsername,
+                  finalPrayer,
+                  cfg.maxTtsWords
+                )
               );
             }
           }
 
           if (npcSpeechParts.length > 0) {
+            enqueuedNpc = true;
             lastBotTtsSecRef.current = nowSec;
-            soundEngine.enqueueTTS(npcSpeechParts.join('. '), false, cfg);
+            soundEngine.enqueueTTS(npcSpeechParts.join('. '), false, cfg, meta);
           }
         }
-      }
+        if (!enqueuedNpc && hasComment) {
+          requestCameraFocus({
+            pilgrimId: targetPilgrimId,
+            username: finalUsername,
+            reason: 'comment',
+            isBot: true,
+            fallbackWhenNoTts: true,
+          });
+        }
+      };
 
       const offeringType = inferOfferingTypeFromCoins(isVip, effectiveCoins);
       const resolvedAvatar =
@@ -1900,6 +2259,8 @@ export function useTempleEngine() {
             p.state !== 'leave_down_exit'
         );
         if (existingOnStage) {
+          const addedCoinsNow = Math.max(1, coins);
+          const wasStillCarrying = Boolean(existingOnStage.isCarryingGift);
           const isAlreadyAtOrWalkingToBurner =
             existingOnStage.state === 'walk_in_up' ||
             existingOnStage.state === 'throw_offering_at_burner' ||
@@ -1908,7 +2269,11 @@ export function useTempleEngine() {
           existingOnStage.isVip = true;
           existingOnStage.isCarryingGift = true;
           existingOnStage.isBot = isBot;
+          existingOnStage.isSimulatedTest = Boolean(isSimulatedTest);
           existingOnStage.coins = Math.max(existingOnStage.coins, effectiveCoins, 1);
+          existingOnStage.pendingGiftCoins =
+            (wasStillCarrying ? existingOnStage.pendingGiftCoins || 0 : 0) +
+            addedCoinsNow;
           existingOnStage.offeringType = offeringType;
           existingOnStage.comboCount = effectiveComboCount;
           existingOnStage.giftName = effectiveGiftName;
@@ -1929,6 +2294,8 @@ export function useTempleEngine() {
             if (existingOnStage.state === 'ceremony_at_burner') {
               existingOnStage.state = 'throw_offering_at_burner';
               existingOnStage.stateTimer = 0.55;
+            } else if (existingOnStage.state === 'throw_offering_at_burner') {
+              existingOnStage.stateTimer = Math.max(existingOnStage.stateTimer, 0.35);
             }
           } else {
             releaseSlotById(existingOnStage.slotId);
@@ -1937,12 +2304,7 @@ export function useTempleEngine() {
           }
 
           setPilgrims([...pilgrimsRef.current]);
-          requestCameraFocus({
-            pilgrimId: existingOnStage.id,
-            username: existingOnStage.username,
-            reason: effectiveCoins >= 10 ? 'special_gift' : 'gift',
-            isBot,
-          });
+          scheduleSpeechAndCameraForPilgrim(existingOnStage.id);
           return;
         }
       }
@@ -1953,6 +2315,7 @@ export function useTempleEngine() {
       ).length;
 
       if (coins > 0) {
+        const addedCoinsNow = Math.max(1, coins);
         if (activeStageCount >= maxStageCapacity && !isBot) {
           const botToYield =
             pilgrimsRef.current.find(
@@ -1972,7 +2335,7 @@ export function useTempleEngine() {
               username: finalUsername,
               prayer: '',
               isVip: true,
-              coins: Math.max(effectiveCoins, 1),
+              coins: addedCoinsNow,
               avatarUrl: resolvedAvatar,
               comboCount: effectiveComboCount,
               giftName: effectiveGiftName,
@@ -1989,13 +2352,14 @@ export function useTempleEngine() {
             username: finalUsername,
             prayer: '',
             isVip: true,
-            coins: Math.max(effectiveCoins, 1),
+            coins: addedCoinsNow,
             avatarUrl: resolvedAvatar,
             comboCount: effectiveComboCount,
             giftName: effectiveGiftName,
             isBot,
             hasComment: false,
             isCarryingGift: true,
+            isSimulatedTest,
           },
           null,
           false
@@ -2003,13 +2367,7 @@ export function useTempleEngine() {
 
         pilgrimsRef.current = [...pilgrimsRef.current, newVipPilgrim];
         setPilgrims(pilgrimsRef.current);
-
-        requestCameraFocus({
-          pilgrimId: newVipPilgrim.id,
-          username: newVipPilgrim.username,
-          reason: effectiveCoins >= 10 ? 'special_gift' : 'gift',
-          isBot,
-        });
+        scheduleSpeechAndCameraForPilgrim(newVipPilgrim.id);
         return;
       }
 
@@ -2020,7 +2378,6 @@ export function useTempleEngine() {
       }
 
       // TRƯỜNG HỢP 2: Người chơi đang ở sẵn trên sân và gửi Comment mới ->
-      // Theo thuật toán mới: Khi có comment thì đi ra đường thảm đỏ ở giữa, tiến đến trước lư hương để thắp nhang rồi mới tìm chỗ ngồi (vào chỗ ngồi thì bái và thiền như bình thường)
       const existingNormal = pilgrimsRef.current.find(
         (p) =>
           p.isBot === isBot &&
@@ -2058,14 +2415,7 @@ export function useTempleEngine() {
         }
 
         setPilgrims([...pilgrimsRef.current]);
-        if (hasComment) {
-          requestCameraFocus({
-            pilgrimId: existingNormal.id,
-            username: existingNormal.username,
-            reason: 'comment',
-            isBot: false,
-          });
-        }
+        scheduleSpeechAndCameraForPilgrim(existingNormal.id);
         return;
       }
 
@@ -2097,8 +2447,7 @@ export function useTempleEngine() {
         }
       }
 
-      // TRƯỜNG HỢP 3: Khách mới vào chùa (Có thể có comment hoặc chỉ vào chùa bái lạy):
-      // - Nếu isVip (ví dụ NPC ngồi ghế VIP giữ nhiệt nhưng không dâng lễ coins=0): ưu tiên lấy ghế VIP trống
+      // TRƯỜNG HỢP 3: Khách mới vào chùa
       if (isVip) {
         const freeVipSlots = vipSlotsRef.current.filter(
           (s) => s.occupiedById === null
@@ -2122,14 +2471,7 @@ export function useTempleEngine() {
           );
           pilgrimsRef.current = [...pilgrimsRef.current, newVipVisitor];
           setPilgrims(pilgrimsRef.current);
-          if (hasComment) {
-            requestCameraFocus({
-              pilgrimId: newVipVisitor.id,
-              username: newVipVisitor.username,
-              reason: 'comment',
-              isBot,
-            });
-          }
+          scheduleSpeechAndCameraForPilgrim(newVipVisitor.id);
           return;
         }
       }
@@ -2179,14 +2521,7 @@ export function useTempleEngine() {
         );
         pilgrimsRef.current = [...pilgrimsRef.current, newNormalPilgrim];
         setPilgrims(pilgrimsRef.current);
-        if (hasComment) {
-          requestCameraFocus({
-            pilgrimId: newNormalPilgrim.id,
-            username: newNormalPilgrim.username,
-            reason: 'comment',
-            isBot,
-          });
-        }
+        scheduleSpeechAndCameraForPilgrim(newNormalPilgrim.id);
       } else if (normalSlotsRef.current.length > 0) {
         const baseSlot =
           normalSlotsRef.current[
@@ -2216,14 +2551,7 @@ export function useTempleEngine() {
         );
         pilgrimsRef.current = [...pilgrimsRef.current, newNormalPilgrim];
         setPilgrims(pilgrimsRef.current);
-        if (hasComment) {
-          requestCameraFocus({
-            pilgrimId: newNormalPilgrim.id,
-            username: newNormalPilgrim.username,
-            reason: 'comment',
-            isBot,
-          });
-        }
+        scheduleSpeechAndCameraForPilgrim(newNormalPilgrim.id);
       } else if (!isBot) {
         enqueueWithPriority({
           username: finalUsername,
@@ -2236,7 +2564,6 @@ export function useTempleEngine() {
       }
     },
     [
-      addDonorCoins,
       createPilgrimInstance,
       enqueueWithPriority,
       pickRandomNpcAvatar,
@@ -2729,9 +3056,22 @@ export function useTempleEngine() {
         } else if (copy.state === 'throw_offering_at_burner') {
           copy.stateTimer -= dt;
           if (copy.stateTimer <= 0) {
+            const offeredCoins = Math.max(
+              1,
+              copy.pendingGiftCoins || copy.coins || 1
+            );
+            const lotusPoints = offeredCoins * 150;
             copy.isCarryingGift = false;
+            copy.pendingGiftCoins = 0;
             setLatestAltarOffering(copy.offeringType);
-            spawnBurnerLotusBurst(cfg.incenseBurner.x, cfg.incenseBurner.y);
+            spawnBurnerLotusBurst(
+              cfg.incenseBurner.x,
+              cfg.incenseBurner.y,
+              lotusPoints
+            );
+            if (!copy.isBot && !copy.isSimulatedTest) {
+              addLotusDonorHearts(copy.username, lotusPoints);
+            }
             // Sau khi dâng lễ lên lư hương: thắp nhang + bái lạy 1 cái trước khi bắt đầu hành động kế tiếp
             copy.state = 'ceremony_at_burner';
             copy.stateTimer = 1.65;
@@ -3023,13 +3363,6 @@ export function useTempleEngine() {
               );
             }
 
-            requestCameraFocus({
-              pilgrimId: chosenBot.id,
-              username: chosenBot.username,
-              reason: 'comment',
-              isBot: true,
-            });
-
             if (!isObsClient) {
               syncService.sendCommand('NPC_PRAY_EVENT', {
                 pilgrimId: chosenBot.id,
@@ -3053,87 +3386,49 @@ export function useTempleEngine() {
               const speechLine = soundEngine.formatEventTemplate(
                 tpl,
                 chosenBot.username,
-                nextPrayer
+                nextPrayer,
+                cfg.maxTtsWords
               );
-              soundEngine.enqueueTTS(speechLine, false, cfg);
+              soundEngine.enqueueTTS(speechLine, false, cfg, {
+                pilgrimId: chosenBot.id,
+                username: chosenBot.username,
+                reason: 'comment',
+                isBot: true,
+              });
+            } else {
+              requestCameraFocus({
+                pilgrimId: chosenBot.id,
+                username: chosenBot.username,
+                reason: 'comment',
+                isBot: true,
+                fallbackWhenNoTts: true,
+              });
             }
           }
         }
       }
 
-      // 4. Cập nhật Hàng Chờ Camera (Camera Queue) & Chế độ giữ / đẩy Camera
+      // 4. Kiểm tra mục tiêu Camera hiện tại:
+      // - Khi đang đọc TTS (curCam.until === Number.MAX_SAFE_INTEGER), Camera giữ nguyên theo lời đọc cho đến khi đọc xong hoặc nhân vật rời khỏi chùa.
+      // - Chỉ khi không có TTS (fallback / manual focus) mới tự nhả khi hết thời gian.
       const nowMs = Date.now();
-      if (cameraQueueRef.current.length > 0) {
-        const validQueue = cameraQueueRef.current.filter((q) =>
-          nextPilgrims.some(
-            (p) => p.id === q.pilgrimId && p.state !== 'leave_down_exit'
-          )
-        );
-        if (validQueue.length !== cameraQueueRef.current.length) {
-          cameraQueueRef.current = validQueue;
-          setCameraQueue([...validQueue]);
-        }
-      }
-
       const curCam = cameraFocusRef.current;
       if (curCam.pilgrimId !== null) {
         const targetExists = nextPilgrims.some(
           (p) => p.id === curCam.pilgrimId && p.state !== 'leave_down_exit'
         );
-        const isLockExpired = !curCam.lockedUntil || nowMs >= curCam.lockedUntil;
-        const hasWaitingPushGift =
-          cfg.cameraPushOnGiftEnabled &&
-          isLockExpired &&
-          cameraQueueRef.current.some(
-            (q) => q.reason === 'gift' || q.reason === 'special_gift'
-          );
-        const isHoldExpired = nowMs >= curCam.until;
+        const isHoldExpired =
+          curCam.until !== Number.MAX_SAFE_INTEGER && nowMs >= curCam.until;
 
-        if (!targetExists || isHoldExpired || hasWaitingPushGift) {
-          if (cameraQueueRef.current.length > 0) {
-            const nextItem = cameraQueueRef.current.shift()!;
-            setCameraQueue([...cameraQueueRef.current]);
-            const holdMs = Math.max(1, cfg.cameraHoldDurationSec || 5) * 1000;
-            const specialLockMs =
-              Math.max(1, cfg.cameraSpecialGiftLockSec || 3) * 1000;
-            const nextFocus: CameraFocusState = {
-              pilgrimId: nextItem.pilgrimId,
-              username: nextItem.username,
-              reason: nextItem.reason,
-              isBot: nextItem.isBot,
-              until: nowMs + holdMs,
-              lockedUntil:
-                nextItem.reason === 'special_gift' ? nowMs + specialLockMs : 0,
-            };
-            cameraFocusRef.current = nextFocus;
-            setCameraFocus(nextFocus);
-          } else if (!targetExists || isHoldExpired) {
-            const resetFocus: CameraFocusState = {
-              pilgrimId: null,
-              until: 0,
-              lockedUntil: 0,
-            };
-            cameraFocusRef.current = resetFocus;
-            setCameraFocus(resetFocus);
-          }
+        if (!targetExists || isHoldExpired) {
+          const resetFocus: CameraFocusState = {
+            pilgrimId: null,
+            until: 0,
+            lockedUntil: 0,
+          };
+          cameraFocusRef.current = resetFocus;
+          setCameraFocus(resetFocus);
         }
-      } else if (cameraQueueRef.current.length > 0) {
-        const nextItem = cameraQueueRef.current.shift()!;
-        setCameraQueue([...cameraQueueRef.current]);
-        const holdMs = Math.max(1, cfg.cameraHoldDurationSec || 5) * 1000;
-        const specialLockMs =
-          Math.max(1, cfg.cameraSpecialGiftLockSec || 3) * 1000;
-        const nextFocus: CameraFocusState = {
-          pilgrimId: nextItem.pilgrimId,
-          username: nextItem.username,
-          reason: nextItem.reason,
-          isBot: nextItem.isBot,
-          until: nowMs + holdMs,
-          lockedUntil:
-            nextItem.reason === 'special_gift' ? nowMs + specialLockMs : 0,
-        };
-        cameraFocusRef.current = nextFocus;
-        setCameraFocus(nextFocus);
       }
 
       // 5. Giới hạn trần sân chùa (maxStageCapacity) & Điều kiện gọi NPC mới:
@@ -3212,6 +3507,7 @@ export function useTempleEngine() {
     animId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(animId);
   }, [
+    addLotusDonorHearts,
     createPilgrimInstance,
     pickRandomNpcName,
     pickRandomNpcPrayer,
@@ -3270,27 +3566,10 @@ export function useTempleEngine() {
     []
   );
 
-  // Camera Control Handlers
+  // Camera Control Handlers (Đồng bộ trực tiếp với Hàng chờ lời đọc TTS)
   const handleSkipCameraTarget = useCallback(() => {
-    const cfg = configRef.current;
-    const now = Date.now();
-    if (cameraQueueRef.current.length > 0) {
-      const nextItem = cameraQueueRef.current.shift()!;
-      setCameraQueue([...cameraQueueRef.current]);
-      const holdMs = Math.max(1, cfg.cameraHoldDurationSec || 5) * 1000;
-      const specialLockMs =
-        Math.max(1, cfg.cameraSpecialGiftLockSec || 3) * 1000;
-      const nextFocus: CameraFocusState = {
-        pilgrimId: nextItem.pilgrimId,
-        username: nextItem.username,
-        reason: nextItem.reason,
-        isBot: nextItem.isBot,
-        until: now + holdMs,
-        lockedUntil: nextItem.reason === 'special_gift' ? now + specialLockMs : 0,
-      };
-      cameraFocusRef.current = nextFocus;
-      setCameraFocus(nextFocus);
-    } else {
+    soundEngine.skipCurrentEvent(configRef.current);
+    if (!soundEngine.getBusyState()) {
       const resetFocus: CameraFocusState = {
         pilgrimId: null,
         until: 0,
@@ -3303,6 +3582,7 @@ export function useTempleEngine() {
   }, []);
 
   const handleResetCameraView = useCallback(() => {
+    soundEngine.clearEventQueue();
     cameraQueueRef.current = [];
     setCameraQueue([]);
     const resetFocus: CameraFocusState = {
@@ -3316,12 +3596,14 @@ export function useTempleEngine() {
   }, []);
 
   const handleClearCameraQueue = useCallback(() => {
+    soundEngine.clearEventQueue();
     cameraQueueRef.current = [];
     setCameraQueue([]);
     syncService.sendCommand('CAMERA_CMD', { type: 'CLEAR_QUEUE' });
   }, []);
 
   const handleRemoveCameraQueueItem = useCallback((queueId: string) => {
+    soundEngine.removeEventQueueItemById(queueId);
     cameraQueueRef.current = cameraQueueRef.current.filter(
       (q) => q.id !== queueId
     );
@@ -3622,20 +3904,28 @@ export function useTempleEngine() {
             setPilgrims([...pilgrimsRef.current]);
             soundEngine.playWoodenFish(cfg.ttsVolume, undefined, true);
             pushFloatingToast(`${speakerName}: ${text}`, speakerVip);
-            requestCameraFocus({
-              pilgrimId: targetId,
-              username: speakerName,
-              reason: 'comment',
-              isBot: speakerBot,
-            });
             if (cfg.ttsEnabled) {
               const speechLine = soundEngine.formatPrayerSpeech(
                 speakerName,
                 text,
                 speakerVip,
-                cfg.ttsTemplate
+                cfg.ttsTemplate,
+                cfg.maxTtsWords
               );
-              soundEngine.enqueueTTS(speechLine, speakerVip, cfg);
+              soundEngine.enqueueTTS(speechLine, speakerVip, cfg, {
+                pilgrimId: targetId,
+                username: speakerName,
+                reason: 'comment',
+                isBot: speakerBot,
+              });
+            } else {
+              requestCameraFocus({
+                pilgrimId: targetId,
+                username: speakerName,
+                reason: 'comment',
+                isBot: speakerBot,
+                fallbackWhenNoTts: true,
+              });
             }
           }
           break;
@@ -3669,12 +3959,6 @@ export function useTempleEngine() {
                 targetBot.isVip
               );
             }
-            requestCameraFocus({
-              pilgrimId: targetBot.id,
-              username: targetBot.username,
-              reason: 'comment',
-              isBot: true,
-            });
             if (cfg.npcPrayerTtsEnabled || cfg.botSpeakTTS) {
               const tpl = pickRandomTemplate(
                 cfg.prayerTtsTemplates,
@@ -3683,9 +3967,23 @@ export function useTempleEngine() {
               const speechLine = soundEngine.formatEventTemplate(
                 tpl,
                 targetBot.username,
-                nextPrayer
+                nextPrayer,
+                cfg.maxTtsWords
               );
-              soundEngine.enqueueTTS(speechLine, false, cfg);
+              soundEngine.enqueueTTS(speechLine, false, cfg, {
+                pilgrimId: targetBot.id,
+                username: targetBot.username,
+                reason: 'comment',
+                isBot: true,
+              });
+            } else {
+              requestCameraFocus({
+                pilgrimId: targetBot.id,
+                username: targetBot.username,
+                reason: 'comment',
+                isBot: true,
+                fallbackWhenNoTts: true,
+              });
             }
           }
           break;
@@ -3693,26 +3991,8 @@ export function useTempleEngine() {
         case 'CAMERA_CMD': {
           const cmdType = payload?.type;
           if (cmdType === 'SKIP') {
-            const cfg = configRef.current;
-            const now = Date.now();
-            if (cameraQueueRef.current.length > 0) {
-              const nextItem = cameraQueueRef.current.shift()!;
-              setCameraQueue([...cameraQueueRef.current]);
-              const holdMs = Math.max(1, cfg.cameraHoldDurationSec || 5) * 1000;
-              const specialLockMs =
-                Math.max(1, cfg.cameraSpecialGiftLockSec || 3) * 1000;
-              const nextFocus: CameraFocusState = {
-                pilgrimId: nextItem.pilgrimId,
-                username: nextItem.username,
-                reason: nextItem.reason,
-                isBot: nextItem.isBot,
-                until: now + holdMs,
-                lockedUntil:
-                  nextItem.reason === 'special_gift' ? now + specialLockMs : 0,
-              };
-              cameraFocusRef.current = nextFocus;
-              setCameraFocus(nextFocus);
-            } else {
+            soundEngine.skipCurrentEvent(configRef.current);
+            if (!soundEngine.getBusyState()) {
               const resetFocus: CameraFocusState = {
                 pilgrimId: null,
                 until: 0,
@@ -3722,6 +4002,7 @@ export function useTempleEngine() {
               setCameraFocus(resetFocus);
             }
           } else if (cmdType === 'RESET') {
+            soundEngine.clearEventQueue();
             cameraQueueRef.current = [];
             setCameraQueue([]);
             const resetFocus: CameraFocusState = {
@@ -3732,6 +4013,7 @@ export function useTempleEngine() {
             cameraFocusRef.current = resetFocus;
             setCameraFocus(resetFocus);
           } else if (cmdType === 'CLEAR_QUEUE') {
+            soundEngine.clearEventQueue();
             cameraQueueRef.current = [];
             setCameraQueue([]);
           } else if (cmdType === 'FOCUS_NOW' && typeof payload.pilgrimId === 'number') {
@@ -3749,18 +4031,40 @@ export function useTempleEngine() {
           break;
         }
         case 'TRIGGER_LIKE': {
-          const count = Number(payload.count) || 1;
+          const count = Math.max(1, Number(payload.count) || 1);
           const uname = payload.username || '';
-          triggerHeadLotusBurst(
-            uname,
-            count >= 50 ? 4 : count >= 10 ? 2 : 1,
-            count
-          );
+          accumulateLikeBurst(count, uname, true);
+          break;
+        }
+        case 'SYNC_GRAND_EVENT': {
+          if (typeof payload.progress === 'number') {
+            grandEventProgressRef.current = payload.progress;
+            setGrandEventProgress(payload.progress);
+            setEventBarFlashKey(Date.now() + Math.random());
+          }
+          if (payload.celebrate) {
+            activateGrandEventCelebration();
+          }
+          break;
+        }
+        case 'UPDATE_LOTUS_DONORS': {
+          if (Array.isArray(payload.lotusDonors)) {
+            const cleanLotusDonors = (payload.lotusDonors as DonorEntry[]).filter(
+              (d) =>
+                d &&
+                typeof d.username === 'string' &&
+                typeof d.coins === 'number' &&
+                d.coins > 0 &&
+                !isVirtualSampleDonorName(d.username)
+            );
+            lotusDonorsRef.current = cleanLotusDonors;
+            setLotusDonors(cleanLotusDonors);
+          }
           break;
         }
         case 'TRIGGER_FOLLOW': {
           const uname = payload.username || 'Phật tử mới';
-          triggerHeadLotusBurst(uname, 2, 100);
+          triggerHeadLotusBurst(uname, 2, 100, true);
           pushFloatingToast(`🌸 ${uname} vừa Follow (+100 Hoa Sen Đại Lễ)`, true);
           break;
         }
@@ -3770,10 +4074,11 @@ export function useTempleEngine() {
           activateGrandEventCelebration();
           break;
         }
-        case 'CLEAR_DONORS': {
-          setDonors([]);
+        case 'CLEAR_LOTUS_DONORS': {
+          lotusDonorsRef.current = [];
+          setLotusDonors([]);
           try {
-            localStorage.removeItem(TEMPLE_DONORS_STORAGE_KEY);
+            localStorage.removeItem(TEMPLE_LOTUS_DONORS_STORAGE_KEY);
           } catch {
             // ignore
           }
@@ -3814,7 +4119,7 @@ export function useTempleEngine() {
               npcPrayers: npcPrayersRef.current,
               npcAvatars: npcAvatarsRef.current,
               customAssets: customAssetsRef.current,
-              donors: donorsRef.current,
+              lotusDonors: lotusDonorsRef.current,
               pilgrims: pilgrimsRef.current,
               monks: monksRef.current,
             });
@@ -3823,7 +4128,7 @@ export function useTempleEngine() {
         }
         case 'RESTORE_BACKUP': {
           const data = payload as StudioBackupData & {
-            donors?: DonorEntry[];
+            lotusDonors?: DonorEntry[];
             pilgrims?: PilgrimData[];
             monks?: TempleMonkData[];
           };
@@ -3882,9 +4187,9 @@ export function useTempleEngine() {
             npcAvatarsRef.current = data.npcAvatars;
             saveStringListToStorage(NPC_AVATARS_STORAGE_KEY, data.npcAvatars);
           }
-          if (Array.isArray(data.donors)) {
-            donorsRef.current = data.donors;
-            setDonors(data.donors);
+          if (Array.isArray(data.lotusDonors)) {
+            lotusDonorsRef.current = data.lotusDonors;
+            setLotusDonors(data.lotusDonors);
           }
           if (Array.isArray(data.pilgrims)) {
             pilgrimsRef.current = data.pilgrims;
@@ -3944,11 +4249,26 @@ export function useTempleEngine() {
           fromTikTokWs: true,
         });
       } else if (ev.type === 'like') {
-        const count = Math.max(1, Number(ev.likeCount) || 1);
-        triggerHeadLotusBurst(ev.username, count >= 30 ? 3 : 1, count);
+        const rawCount = Math.max(1, Number(ev.likeCount) || 1);
+        const totalRoom = Number((ev as any).totalLikeCount || 0);
+        let effectiveLikeCount = rawCount;
+        if (
+          rawCount <= 1 &&
+          totalRoom > lastTikTokRoomLikesRef.current &&
+          lastTikTokRoomLikesRef.current > 0
+        ) {
+          const delta = totalRoom - lastTikTokRoomLikesRef.current;
+          if (delta > 1 && delta <= 100) {
+            effectiveLikeCount = delta;
+          }
+        }
+        if (totalRoom > lastTikTokRoomLikesRef.current) {
+          lastTikTokRoomLikesRef.current = totalRoom;
+        }
+        accumulateLikeBurst(effectiveLikeCount, ev.username, false);
       } else if (ev.type === 'follow') {
         const uname = ev.username || 'Phật tử mới';
-        triggerHeadLotusBurst(uname, 2, 100);
+        triggerHeadLotusBurst(uname, 2, 100, false);
         pushFloatingToast(`🌸 ${uname} vừa Follow (+100 Hoa Sen Đại Lễ)`, true);
       }
     });
@@ -3958,6 +4278,7 @@ export function useTempleEngine() {
       unsubTikTok();
     };
   }, [
+    accumulateLikeBurst,
     activateGrandEventCelebration,
     addGrandEventLotus,
     pickRandomNpcName,
@@ -4156,7 +4477,7 @@ export function useTempleEngine() {
       npcPrayers: npcPrayersRef.current,
       npcAvatars: npcAvatarsRef.current,
       customAssets: customAssetsRef.current,
-      donors: donorsRef.current,
+      lotusDonors: lotusDonorsRef.current,
       pilgrims: pilgrimsRef.current,
       monks: monksRef.current,
     });
@@ -4225,6 +4546,7 @@ export function useTempleEngine() {
         playSound: true,
         isBot: false,
         broadcastSync: true,
+        isSimulatedTest: true,
       });
     },
     [pickRandomNpcName, pickRandomNpcPrayer, requestSpawnPilgrim]
@@ -4488,20 +4810,28 @@ export function useTempleEngine() {
         setPilgrims([...pilgrimsRef.current]);
         soundEngine.playWoodenFish(cfg.ttsVolume, undefined, true);
         pushFloatingToast(`${speakerName}: ${text}`, speakerVip);
-        requestCameraFocus({
-          pilgrimId: pid,
-          username: speakerName,
-          reason: 'comment',
-          isBot: speakerBot,
-        });
         if (cfg.ttsEnabled) {
           const speechLine = soundEngine.formatPrayerSpeech(
             speakerName,
             text,
             speakerVip,
-            cfg.ttsTemplate
+            cfg.ttsTemplate,
+            cfg.maxTtsWords
           );
-          soundEngine.enqueueTTS(speechLine, speakerVip, cfg);
+          soundEngine.enqueueTTS(speechLine, speakerVip, cfg, {
+            pilgrimId: pid,
+            username: speakerName,
+            reason: 'comment',
+            isBot: speakerBot,
+          });
+        } else {
+          requestCameraFocus({
+            pilgrimId: pid,
+            username: speakerName,
+            reason: 'comment',
+            isBot: speakerBot,
+            fallbackWhenNoTts: true,
+          });
         }
         syncService.sendCommand('ENTITY_CHAT', {
           target,
@@ -4576,6 +4906,7 @@ export function useTempleEngine() {
       playSound: true,
       isBot: false,
       broadcastSync: true,
+      isSimulatedTest: true,
     });
   }, [requestSpawnPilgrim]);
 
@@ -4863,26 +5194,16 @@ export function useTempleEngine() {
   const handleTriggerLike = useCallback(
     (count = 1, username?: string) => {
       syncService.sendCommand('TRIGGER_LIKE', { count, username });
-      const uname = (username || '').trim() || 'Phật tử';
-      pushFloatingToast(
-        `💗 ${uname} thả +${count} Hoa Sen Đại Lễ`,
-        false,
-        `like:${uname.toLowerCase()}`
-      );
-      triggerHeadLotusBurst(
-        username,
-        count >= 50 ? 4 : count >= 10 ? 2 : 1,
-        count
-      );
+      accumulateLikeBurst(count, username, false);
     },
-    [pushFloatingToast, triggerHeadLotusBurst]
+    [accumulateLikeBurst]
   );
 
   const handleTriggerFollow = useCallback(
     (username?: string) => {
       const uname = username || pickRandomNpcName();
       syncService.sendCommand('TRIGGER_FOLLOW', { username: uname });
-      triggerHeadLotusBurst(uname, 2, 100);
+      triggerHeadLotusBurst(uname, 2, 100, false);
       pushFloatingToast(`🌸 ${uname} vừa Follow (+100 Hoa Sen Đại Lễ)`, true);
     },
     [pickRandomNpcName, pushFloatingToast, triggerHeadLotusBurst]
@@ -4907,6 +5228,7 @@ export function useTempleEngine() {
       comboTestTimersRef.current.forEach((t) => clearTimeout(t));
       comboTestTimersRef.current = [];
 
+      const hasCustomRealUser = Boolean((customUsername || '').trim());
       const uname = (customUsername || '').trim() || 'Nguyễn Thị Yến Nhi';
       const uprayer =
         (customPrayer || '').trim() ||
@@ -4925,6 +5247,7 @@ export function useTempleEngine() {
           isBot: false,
           broadcastSync: true,
           avatarUrl: customAvatarUrl || null,
+          isSimulatedTest: !hasCustomRealUser,
         });
         return;
       }
@@ -4947,6 +5270,7 @@ export function useTempleEngine() {
               isBot: false,
               broadcastSync: true,
               avatarUrl: customAvatarUrl || null,
+              isSimulatedTest: !hasCustomRealUser,
             });
           }, accumulatedDelay);
           comboTestTimersRef.current.push(timer);
@@ -4963,6 +5287,7 @@ export function useTempleEngine() {
             hits: 20,
             prayer: 'Dâng combo Hoa Hồng cầu bình an vô sự 🙏',
             avatarUrl: customAvatarUrl || null,
+            isSimulated: !hasCustomRealUser,
           },
           {
             name: 'Đại Thí Chủ Minh Tâm',
@@ -4971,6 +5296,7 @@ export function useTempleEngine() {
             hits: 10,
             prayer: 'Cầu tài lộc hanh thông, công việc thuận buồm xuôi gió 🙏',
             avatarUrl: null,
+            isSimulated: true,
           },
           {
             name: 'Trần Bảo Ngọc',
@@ -4979,6 +5305,7 @@ export function useTempleEngine() {
             hits: 15,
             prayer: 'Cầu cha mẹ mạnh khỏe, bách niên giai lão 🙏',
             avatarUrl: null,
+            isSimulated: true,
           },
           {
             name: 'Lê Hoàng Nam',
@@ -4987,6 +5314,7 @@ export function useTempleEngine() {
             hits: 5,
             prayer: 'Thành tâm dâng lễ cầu quốc thái dân an 🙏',
             avatarUrl: null,
+            isSimulated: true,
           },
         ];
 
@@ -5006,6 +5334,7 @@ export function useTempleEngine() {
                 isBot: false,
                 broadcastSync: true,
                 avatarUrl: d.avatarUrl,
+                isSimulatedTest: d.isSimulated,
               });
             }, delay);
             comboTestTimersRef.current.push(timer);
@@ -5031,7 +5360,7 @@ export function useTempleEngine() {
     realCount,
     botCount,
     queueCount,
-    donors,
+    lotusDonors,
     floatingToasts,
     customAssets,
     grandEventProgress,
@@ -5100,7 +5429,7 @@ export function useTempleEngine() {
     handleTriggerFollow,
     handleTriggerGrandEvent,
     handleTriggerGiftCombo,
-    handleClearDonors,
+    handleClearLotusDonors,
     handleSkipCameraTarget,
     handleResetCameraView,
     handleClearCameraQueue,

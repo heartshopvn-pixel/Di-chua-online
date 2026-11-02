@@ -92,28 +92,76 @@ async function startServer() {
     res.json({ ok: true, deliveredTo: Math.max(0, clients.size - 1) });
   });
 
-  // Built-in TTS Audio Proxy for OBS Browser Source compatibility
+  // In-memory LRU cache for TTS MP3 buffers to eliminate latency & repeated requests
+  const ttsBufferCache = new Map<string, Buffer>();
+  const MAX_TTS_CACHE_ITEMS = 160;
+
+  async function fetchGoogleTtsBuffer(text: string, variant: string): Promise<Buffer> {
+    const isSlow = variant === 'google-vi-slow' || variant === 'slow';
+    const speedParam = isSlow ? '0.24' : '1';
+    const cacheKey = `${variant}:${text}`;
+    const cached = ttsBufferCache.get(cacheKey);
+    if (cached) {
+      ttsBufferCache.delete(cacheKey);
+      ttsBufferCache.set(cacheKey, cached);
+      return cached;
+    }
+
+    const encoded = encodeURIComponent(text);
+    const gtxUrl = `https://translate.googleapis.com/translate_tts?ie=UTF-8&tl=vi&client=gtx&ttsspeed=${speedParam}&q=${encoded}`;
+    const twObUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&ttsspeed=${speedParam}&q=${encoded}`;
+    const endpoints =
+      variant === 'google-vi-twob' ? [twObUrl, gtxUrl] : [gtxUrl, twObUrl];
+
+    let lastErr: unknown = null;
+    for (const url of endpoints) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 2200);
+      try {
+        const response = await fetch(url, {
+          signal: controller.signal,
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            Referer: 'https://translate.google.com/',
+          },
+        });
+        clearTimeout(timeout);
+        if (!response.ok) {
+          lastErr = new Error(`HTTP ${response.status}`);
+          continue;
+        }
+        const arrayBuffer = await response.arrayBuffer();
+        const buf = Buffer.from(arrayBuffer);
+        if (buf.length < 128) {
+          lastErr = new Error('Empty audio buffer');
+          continue;
+        }
+        if (ttsBufferCache.size >= MAX_TTS_CACHE_ITEMS) {
+          const oldestKey = ttsBufferCache.keys().next().value;
+          if (oldestKey) ttsBufferCache.delete(oldestKey);
+        }
+        ttsBufferCache.set(cacheKey, buf);
+        return buf;
+      } catch (err) {
+        clearTimeout(timeout);
+        lastErr = err;
+      }
+    }
+    throw lastErr || new Error('All Google TTS mirrors failed');
+  }
+
+  // Built-in TTS Audio Proxy for OBS Browser Source compatibility (Multi-Mirror + Cache)
   app.get('/api/tts', async (req: Request, res: Response) => {
     try {
-      const text = String(req.query.text || 'Nam mô A Di Đà Phật').slice(0, 200);
-      const gUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(
-        text
-      )}`;
-      const response = await fetch(gUrl, {
-        headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36',
-        },
-      });
-      if (!response.ok) {
-        res.status(502).end();
-        return;
-      }
+      const text = String(req.query.text || 'Nam mô A Di Đà Phật').trim().slice(0, 200);
+      const voiceVariant = String(req.query.voice || 'google-vi-gtx').trim();
+      const audioBuffer = await fetchGoogleTtsBuffer(text, voiceVariant);
       res.setHeader('Content-Type', 'audio/mpeg');
-      const arrayBuffer = await response.arrayBuffer();
-      res.send(Buffer.from(arrayBuffer));
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.send(audioBuffer);
     } catch {
-      res.status(500).end();
+      res.status(502).end();
     }
   });
 

@@ -13,7 +13,7 @@ import { OfferingModelArt } from './OfferingModelArt';
 
 export type HudBoxKey =
   | 'templeSign'
-  | 'leaderboardBox'
+  | 'lotusLeaderboardBox'
   | 'guideBox'
   | 'toastBox'
   | 'grandEventBox'
@@ -25,7 +25,7 @@ export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se';
 interface StageHudProps {
   hudLayout: HudLayoutConfig;
   customAssets: CustomAssetsConfig;
-  donors: DonorEntry[];
+  lotusDonors?: DonorEntry[];
   floatingToasts: FloatingToastItem[];
   grandEventProgress: number;
   grandEventTarget: number;
@@ -182,7 +182,7 @@ function getGuideTaskColorClasses(item: GuideTaskItem): {
 export const StageHud: React.FC<StageHudProps> = ({
   hudLayout,
   customAssets,
-  donors,
+  lotusDonors = [],
   floatingToasts,
   grandEventProgress,
   grandEventTarget,
@@ -195,13 +195,13 @@ export const StageHud: React.FC<StageHudProps> = ({
 }) => {
   const {
     templeSign,
-    leaderboardBox,
+    lotusLeaderboardBox,
     guideBox,
     toastBox,
     grandEventBox,
     pilgrimCountBox,
     noticeBoardBox,
-    leaderboardTitle,
+    lotusLeaderboardTitle = 'Bảng Hoa Sen',
     guideTitle,
     grandEventTitle,
     pilgrimCountTitle,
@@ -209,22 +209,22 @@ export const StageHud: React.FC<StageHudProps> = ({
     noticeBoardContent = 'Chào mừng Phật tử thập phương về Kim Thiền Tự lễ Phật, cầu bình an & sức khỏe 🙏',
     noticeBoardFontSize = 10,
     grandEventFontSize = 10,
-    leaderboardFontSize = 10,
+    lotusLeaderboardFontSize = 10,
     guideFontSize = 9,
     pilgrimCountFontSize = 10,
     toastFontSize = 10,
     showTempleSign = true,
     showGrandEventBox = true,
     showPilgrimCountBox = true,
-    showLeaderboardBox = true,
+    showLotusLeaderboardBox = true,
     showGuideBox = true,
     showNoticeBoardBox = true,
     showToastBox = true,
-    leaderboardMaxRanks = 5,
+    lotusLeaderboardMaxRanks = 5,
     hudOpacity = 0.88,
     noticeBoardOpacity,
     grandEventOpacity,
-    leaderboardOpacity,
+    lotusLeaderboardOpacity,
     guideOpacity,
     pilgrimCountOpacity,
     toastOpacity,
@@ -235,17 +235,17 @@ export const StageHud: React.FC<StageHudProps> = ({
 
   const safeNoticeFontSize = Math.max(7, Math.min(24, noticeBoardFontSize || 10));
   const safeGrandEventFontSize = Math.max(7, Math.min(24, grandEventFontSize || 10));
-  const safeLeaderboardFontSize = Math.max(7, Math.min(24, leaderboardFontSize || 10));
+  const safeLotusLeaderboardFontSize = Math.max(7, Math.min(24, lotusLeaderboardFontSize || 10));
   const safeGuideFontSize = Math.max(7, Math.min(24, guideFontSize || 9));
   const safePilgrimCountFontSize = Math.max(7, Math.min(24, pilgrimCountFontSize || 10));
   const safeToastFontSize = Math.max(7, Math.min(24, toastFontSize || 10));
-  const safeLeaderboardMaxRanks = Math.max(1, Math.min(20, leaderboardMaxRanks || 5));
+  const safeLotusLeaderboardMaxRanks = Math.max(1, Math.min(20, lotusLeaderboardMaxRanks || 5));
 
   // Cho phép chỉnh độ mờ nền của từng bảng riêng biệt từ 0% (mất nền hoàn toàn) đến 100%
   const defaultOp = clampOpacity(hudOpacity, 0.88);
   const opNotice = clampOpacity(noticeBoardOpacity, defaultOp);
   const opGrandEvent = clampOpacity(grandEventOpacity, defaultOp);
-  const opLeaderboard = clampOpacity(leaderboardOpacity, defaultOp);
+  const opLotusLeaderboard = clampOpacity(lotusLeaderboardOpacity, defaultOp);
   const opGuide = clampOpacity(guideOpacity, defaultOp);
   const opPilgrimCount = clampOpacity(pilgrimCountOpacity, defaultOp);
   const opToast = clampOpacity(toastOpacity, defaultOp);
@@ -255,9 +255,9 @@ export const StageHud: React.FC<StageHudProps> = ({
     ? guideItems
     : DEFAULT_GUIDE_ITEMS;
 
-  const topDonors = [...donors]
+  const topLotusDonors = [...lotusDonors]
     .sort((a, b) => b.coins - a.coins)
-    .slice(0, safeLeaderboardMaxRanks);
+    .slice(0, safeLotusLeaderboardMaxRanks);
   const safeTarget = Math.max(1, grandEventTarget || 1000);
   const progressPercent = isGrandEventActive
     ? 100
@@ -279,6 +279,13 @@ export const StageHud: React.FC<StageHudProps> = ({
     y: 190,
     width: 168,
     height: 76,
+  };
+
+  const safeLotusLeaderboardBox = lotusLeaderboardBox || {
+    x: 392,
+    y: 84,
+    width: 136,
+    height: 74,
   };
 
   return (
@@ -577,58 +584,58 @@ export const StageHud: React.FC<StageHudProps> = ({
         </div>
       )}
 
-      {/* 5. HÌNH TRẮNG TRÊN: Bảng xếp hạng (Tiêu đề mặc định: Bảng công đức) */}
-      {showLeaderboardBox && (
+      {/* 5. BẢNG HOA SEN (Bảng xếp hạng số tim / hoa sen duy nhất) */}
+      {showLotusLeaderboardBox && (
         <div
-          onMouseDown={(e) => editLayoutMode && onStartDragHudBox('leaderboardBox', e)}
-          onTouchStart={(e) => editLayoutMode && onStartDragHudBox('leaderboardBox', e)}
+          onMouseDown={(e) => editLayoutMode && onStartDragHudBox('lotusLeaderboardBox', e)}
+          onTouchStart={(e) => editLayoutMode && onStartDragHudBox('lotusLeaderboardBox', e)}
           className={`absolute rounded-lg border px-2 py-1.5 flex flex-col justify-between ${dragringClass}`}
           style={{
-            left: `${leaderboardBox.x}px`,
-            top: `${leaderboardBox.y}px`,
-            width: `${leaderboardBox.width}px`,
-            height: `${leaderboardBox.height}px`,
-            ...buildBoxSurfaceStyle(opLeaderboard),
+            left: `${safeLotusLeaderboardBox.x}px`,
+            top: `${safeLotusLeaderboardBox.y}px`,
+            width: `${safeLotusLeaderboardBox.width}px`,
+            height: `${safeLotusLeaderboardBox.height}px`,
+            ...buildBoxSurfaceStyle(opLotusLeaderboard),
           }}
         >
           <div
             className="text-center pb-0.5 mb-1 shrink-0"
             style={{
               borderBottom:
-                opLeaderboard > 0.05
-                  ? `1px solid rgba(245, 158, 11, ${(0.3 * opLeaderboard).toFixed(2)})`
+                opLotusLeaderboard > 0.05
+                  ? `1px solid rgba(245, 158, 11, ${(0.3 * opLotusLeaderboard).toFixed(2)})`
                   : '1px solid transparent',
             }}
           >
             <div
               className="font-extrabold tracking-wide text-amber-300 truncate"
-              style={{ fontSize: `${safeLeaderboardFontSize}px` }}
+              style={{ fontSize: `${safeLotusLeaderboardFontSize}px` }}
             >
-              {leaderboardTitle}
+              {lotusLeaderboardTitle || 'Bảng Hoa Sen'}
             </div>
           </div>
           <div
             className="space-y-0.5 flex-1 flex flex-col justify-start overflow-y-auto"
-            style={{ fontSize: `${Math.max(7, safeLeaderboardFontSize - 0.5)}px` }}
+            style={{ fontSize: `${Math.max(7, safeLotusLeaderboardFontSize - 0.5)}px` }}
           >
-            {topDonors.length > 0 ? (
-              topDonors.map((d, idx) => (
+            {topLotusDonors.length > 0 ? (
+              topLotusDonors.map((d, idx) => (
                 <div
-                  key={`${d.username}-${idx}`}
+                  key={`lotus-${d.username}-${idx}`}
                   className="flex items-center justify-between text-stone-100 gap-1 leading-tight"
                 >
                   <span className="truncate">
                     <b className="text-amber-300 font-mono mr-0.5">{idx + 1}.</b>
                     {d.username}
                   </span>
-                  <span className="font-bold font-mono text-amber-400 tabular-nums shrink-0">
-                    {d.coins}
+                  <span className="font-bold font-mono text-pink-300 tabular-nums shrink-0">
+                    {d.coins.toLocaleString('vi-VN')}
                   </span>
                 </div>
               ))
             ) : (
               <div className="my-auto text-center text-stone-400 italic leading-tight">
-                Chưa có thí chủ dâng lễ
+                Chưa có Phật tử ghi danh
               </div>
             )}
           </div>
@@ -636,11 +643,11 @@ export const StageHud: React.FC<StageHudProps> = ({
           {editLayoutMode && (
             <>
               <CornerResizeHandles
-                boxKey="leaderboardBox"
+                boxKey="lotusLeaderboardBox"
                 onStartResizeHudBox={onStartResizeHudBox}
               />
               <span className="absolute -top-5 right-0 px-1.5 py-0.5 rounded bg-amber-400 text-stone-950 text-[9px] font-bold flex items-center gap-0.5 whitespace-nowrap shadow">
-                <Move className="w-2.5 h-2.5" /> {leaderboardTitle} ({leaderboardBox.width}×{leaderboardBox.height})
+                <Move className="w-2.5 h-2.5" /> {lotusLeaderboardTitle || 'Bảng Hoa Sen'} ({safeLotusLeaderboardBox.width}×{safeLotusLeaderboardBox.height})
               </span>
             </>
           )}

@@ -33,7 +33,7 @@ interface GameStageProps {
   normalSlots: KneelSlot[];
   pilgrims: PilgrimData[];
   monks: TempleMonkData[];
-  donors: DonorEntry[];
+  lotusDonors?: DonorEntry[];
   floatingToasts: FloatingToastItem[];
   customAssets: CustomAssetsConfig;
   grandEventProgress: number;
@@ -237,7 +237,7 @@ export const GameStage: React.FC<GameStageProps> = ({
   normalSlots,
   pilgrims,
   monks,
-  donors,
+  lotusDonors = [],
   floatingToasts,
   customAssets,
   grandEventProgress,
@@ -1000,11 +1000,11 @@ export const GameStage: React.FC<GameStageProps> = ({
             className="absolute inset-0 pointer-events-none z-10"
           />
 
-          {/* Layer 2.8: Hiệu ứng bung tỏa nhiều hoa sen hồng nhỏ tại lư hương khi lễ vật tan biến */}
+          {/* Layer 2.8: Hiệu ứng bung tỏa hoa sen hồng + Floating text +số hoa sen (màu hồng viền đen kèm icon model hoa sen không viền) tại lư hương khi lễ vật tan biến */}
           {burnerLotusBursts.map((burst) => (
             <div
               key={burst.id}
-              className="absolute pointer-events-none z-30"
+              className="absolute pointer-events-none z-35"
               style={{
                 left: `${burst.x}px`,
                 top: `${burst.y}px`,
@@ -1047,6 +1047,64 @@ export const GameStage: React.FC<GameStageProps> = ({
                   );
                 }
               )}
+
+              {/* Floating text +số hoa sen (màu hồng không viền kèm icon model hoa sen không viền) */}
+              {typeof burst.lotusPoints === 'number' && burst.lotusPoints > 0 && (() => {
+                const scoreFontSize = config.hudLayout.lotusFloatingScoreFontSize ?? 12;
+                const iconSize = Math.max(11, Math.round(scoreFontSize * 1.25));
+                return (
+                  <div className="burner-lotus-float-score absolute left-0 top-0 flex items-center gap-0.5 whitespace-nowrap select-none">
+                    <span
+                      className="lotus-score-pink font-extrabold font-mono leading-none tracking-tight"
+                      style={{ fontSize: `${scoreFontSize}px` }}
+                    >
+                      +{burst.lotusPoints.toLocaleString('vi-VN')}
+                    </span>
+                    {customAssets.offeringRoseUrl ? (
+                      <img
+                        src={customAssets.offeringRoseUrl}
+                        alt=""
+                        referrerPolicy="no-referrer"
+                        style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
+                        className="object-contain select-none pointer-events-none"
+                      />
+                    ) : (
+                      <svg
+                        viewBox="0 0 40 40"
+                        style={{ width: `${iconSize}px`, height: `${iconSize}px` }}
+                        className="shrink-0 select-none pointer-events-none"
+                      >
+                        {/* Đài & lá sen không viền */}
+                        <ellipse cx="20" cy="32" rx="13.5" ry="4" fill="#831843" />
+                        <ellipse cx="20" cy="29.5" rx="11.5" ry="2.8" fill="#16a34a" />
+                        {/* Các lớp cánh hoa sen hồng không viền */}
+                        <path
+                          d="M20 9 C14.5 15.5 13 23 20 29 C27 23 25.5 15.5 20 9 Z"
+                          fill="#f472b6"
+                        />
+                        <path
+                          d="M20 29 C12 26 8.5 19 12 13 C15.5 16.5 17.5 22 20 29 Z"
+                          fill="#ec4899"
+                        />
+                        <path
+                          d="M20 29 C28 26 31.5 19 28 13 C24.5 16.5 22.5 22 20 29 Z"
+                          fill="#ec4899"
+                        />
+                        <path
+                          d="M20 30 C10.5 29.5 6 24.5 7.5 19 C12 21.5 15.5 26 20 30 Z"
+                          fill="#db2777"
+                        />
+                        <path
+                          d="M20 30 C29.5 29.5 34 24.5 32.5 19 C28 21.5 24.5 26 20 30 Z"
+                          fill="#db2777"
+                        />
+                        {/* Nhụy sen vàng không viền */}
+                        <circle cx="20" cy="23.5" r="3" fill="#fef08a" />
+                      </svg>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           ))}
 
@@ -1329,11 +1387,11 @@ export const GameStage: React.FC<GameStageProps> = ({
           </div>
         )}
 
-        {/* Layer 5: Draggable & Corner-Resizable HUD Boxes (7 Bảng hiển thị) */}
+        {/* Layer 5: Draggable & Corner-Resizable HUD Boxes */}
         <StageHud
           hudLayout={config.hudLayout}
           customAssets={customAssets}
-          donors={donors}
+          lotusDonors={lotusDonors}
           floatingToasts={floatingToasts}
           grandEventProgress={grandEventProgress}
           grandEventTarget={config.grandEventTarget}

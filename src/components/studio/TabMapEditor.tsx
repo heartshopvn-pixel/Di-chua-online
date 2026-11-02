@@ -12,18 +12,16 @@ import {
   Plus,
   RotateCcw,
   Sparkles,
-  Trash2,
   Upload,
 } from 'lucide-react';
 import {
   CustomAssetsConfig,
   GameConfig,
   GridConfig,
-  GuideTaskItem,
   HudLayoutConfig,
   KneelSlot,
 } from '../../types/game';
-import { DEFAULT_GUIDE_ITEMS, FONT_FAMILY_OPTIONS } from '../../config/constants';
+import { FONT_FAMILY_OPTIONS } from '../../config/constants';
 import { OfferingModelArt } from '../stage/OfferingModelArt';
 
 interface TabMapEditorProps {
@@ -38,6 +36,8 @@ interface TabMapEditorProps {
   onResetAsset: (key: keyof CustomAssetsConfig) => void;
   onSaveBackupJson: () => void;
   onLoadBackupJson: (rawJsonText: string) => { ok: boolean; message: string };
+  lotusDonorsCount?: number;
+  onClearLotusDonors?: () => void;
 }
 
 function buildLightweightConfigForPreview(config: GameConfig): GameConfig {
@@ -71,6 +71,8 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
   onResetAsset,
   onSaveBackupJson,
   onLoadBackupJson,
+  lotusDonorsCount = 0,
+  onClearLotusDonors,
 }) => {
   const [copiedJson, setCopiedJson] = useState(false);
   const [pasteJsonText, setPasteJsonText] = useState('');
@@ -146,12 +148,14 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
     setTimeout(() => setJsonStatus(null), 4000);
   };
 
+  const hud = config.hudLayout;
+
   return (
-    <div className="space-y-5">
-      {/* Section 1: Drag/Resize HUD Boards, Edit Zone Edges & Toggle Position Circles */}
-      <section className="space-y-2.5">
-        <h2 className="text-xs font-semibold text-stone-200">
-          Chỉnh sửa trực tiếp trên màn hình chính (Kéo Bảng, Cạnh Vùng & Vòng Tròn Vị Trí)
+    <div className="space-y-4">
+      {/* 1. Chỉnh Sửa Trực Tiếp Trên Màn Hình */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-stone-800 space-y-2">
+        <h2 className="text-xs font-bold text-stone-200">
+          Chỉnh Sửa Trực Tiếp Trên Sân
         </h2>
 
         <div className="grid grid-cols-3 gap-2">
@@ -163,12 +167,12 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             className={`py-2 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
               config.hudLayout.editLayoutMode
                 ? 'bg-amber-400 text-stone-950'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-800'
+                : 'bg-stone-950 hover:bg-stone-800 text-stone-200 border border-stone-800'
             }`}
           >
             <Move className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">
-              {config.hudLayout.editLayoutMode ? 'Đang sửa 6 Bảng' : 'Sửa 6 Bảng & Cỡ'}
+              {config.hudLayout.editLayoutMode ? 'Đang sửa Bảng' : 'Sửa Bảng'}
             </span>
           </button>
 
@@ -180,7 +184,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             className={`py-2 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
               config.showZoneBounds
                 ? 'bg-fuchsia-400 text-stone-950'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-800'
+                : 'bg-stone-950 hover:bg-stone-800 text-stone-200 border border-stone-800'
             }`}
           >
             <Maximize2 className="w-3.5 h-3.5 shrink-0" />
@@ -195,87 +199,450 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             className={`py-2 px-2.5 rounded-lg text-[11px] font-bold flex items-center justify-center gap-1 transition cursor-pointer ${
               config.showWaypoints
                 ? 'bg-emerald-400 text-stone-950'
-                : 'bg-stone-900 hover:bg-stone-800 text-stone-200 border border-stone-800'
+                : 'bg-stone-950 hover:bg-stone-800 text-stone-200 border border-stone-800'
             }`}
           >
             <Crosshair className="w-3.5 h-3.5 shrink-0" />
             <span className="truncate">
-              {config.showWaypoints ? 'Đang hiện Vòng' : 'Vòng tròn vị trí'}
+              {config.showWaypoints ? 'Đang hiện Vòng' : 'Vòng vị trí'}
             </span>
           </button>
         </div>
+      </section>
 
-        <div className="p-2 rounded-lg bg-stone-900/50 border border-stone-800/80 text-[10.5px] text-stone-400 space-y-1">
-          <p>
-            • <strong>Sửa 6 Bảng & Cỡ:</strong> Kéo thân bảng để đổi vị trí, bấm kéo <strong>4 góc xanh</strong> của bảng để chỉnh kích thước.
-          </p>
-          <p>
-            • <strong>Vùng di chuyển:</strong> Bấm trực tiếp vào <strong>4 cạnh của hình chữ nhật</strong> (Trụ trì hoặc 2 vùng đỏ) để kéo rộng/hẹp vùng.
-          </p>
-          <p>
-            • <strong>Vòng tròn vị trí (Hỗ trợ chọn nhiều ghế):</strong> Khi bật Vòng tròn vị trí, bạn có thể <strong>kéo chuột trên nền sân để quét chọn 1 vùng nhiều ghế cùng lúc</strong> (hoặc giữ <strong>Shift + Click</strong> từng ghế), sau đó nắm kéo 1 ghế bất kỳ trong nhóm để <strong>di chuyển cả cụm ghế</strong> cùng nhau!
-          </p>
+      {/* 2. Bảng Hoa Sen (BXH Số Tim / Hoa Sen) */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-pink-500/35 space-y-2">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-xs font-bold text-pink-200">
+              Bảng Hoa Sen ({lotusDonorsCount} phật tử)
+            </h2>
+          </div>
+          {onClearLotusDonors && (
+            <button
+              type="button"
+              onClick={onClearLotusDonors}
+              className="px-2 py-1 rounded bg-rose-950/70 hover:bg-rose-900 border border-rose-500/40 text-[10px] font-bold text-rose-200 flex items-center gap-1 cursor-pointer transition shrink-0"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span>Làm mới BXH</span>
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            {[3, 4, 5, 8, 10].map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() =>
+                  onUpdateHudLayout({ lotusLeaderboardMaxRanks: preset })
+                }
+                className={`px-2 py-0.5 rounded text-[10px] font-mono cursor-pointer transition ${
+                  (hud.lotusLeaderboardMaxRanks ?? 5) === preset
+                    ? 'bg-pink-400 text-stone-950 font-bold'
+                    : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                }`}
+              >
+                Top {preset}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <input
+              type="range"
+              min={1}
+              max={20}
+              step={1}
+              value={hud.lotusLeaderboardMaxRanks ?? 5}
+              onChange={(e) =>
+                onUpdateHudLayout({
+                  lotusLeaderboardMaxRanks: Math.max(
+                    1,
+                    Math.min(20, parseInt(e.target.value, 10) || 5)
+                  ),
+                })
+              }
+              className="w-20 accent-pink-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+            />
+            <span className="text-[11px] font-mono font-bold text-pink-300 w-12 text-right">
+              Top {hud.lotusLeaderboardMaxRanks ?? 5}
+            </span>
+          </div>
+        </div>
+
+        {/* Cỡ chữ Floating Text +Số Hoa Sen khi dâng lễ vật */}
+        <div className="pt-1.5 border-t border-stone-800/80 flex items-center justify-between gap-2">
+          <span className="text-[11px] text-stone-300 font-medium">
+            Size chữ +tim dâng lễ:
+          </span>
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateHudLayout({
+                  lotusFloatingScoreFontSize: Math.max(
+                    8,
+                    (hud.lotusFloatingScoreFontSize ?? 12) - 1
+                  ),
+                })
+              }
+              className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-bold flex items-center justify-center cursor-pointer"
+            >
+              -
+            </button>
+            <input
+              type="range"
+              min={8}
+              max={24}
+              step={1}
+              value={hud.lotusFloatingScoreFontSize ?? 12}
+              onChange={(e) =>
+                onUpdateHudLayout({
+                  lotusFloatingScoreFontSize: Math.max(
+                    8,
+                    Math.min(24, parseInt(e.target.value, 10) || 12)
+                  ),
+                })
+              }
+              className="w-20 accent-pink-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+            />
+            <button
+              type="button"
+              onClick={() =>
+                onUpdateHudLayout({
+                  lotusFloatingScoreFontSize: Math.min(
+                    24,
+                    (hud.lotusFloatingScoreFontSize ?? 12) + 1
+                  ),
+                })
+              }
+              className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 text-stone-200 text-xs font-bold flex items-center justify-center cursor-pointer"
+            >
+              +
+            </button>
+            <span className="text-[11px] font-mono font-bold text-pink-300 w-9 text-right">
+              {hud.lotusFloatingScoreFontSize ?? 12}px
+            </span>
+          </div>
         </div>
       </section>
 
-      <hr className="border-stone-800/80" />
-
-      {/* Section 2: Căn chỉnh chỗ ngồi bái lạy, Size nhân vật chung & Thời gian bong bóng chat */}
-      <section className="space-y-3">
+      {/* 3. Ẩn / Hiện, Cỡ Chữ, Độ Mờ Nền & Tiêu Đề Các Bảng */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-stone-800 space-y-2.5">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-stone-200">
-            Căn chỉnh chỗ ngồi bái lạy & Ghế VIP (Tăng giảm không giới hạn)
+          <h2 className="text-xs font-bold text-stone-200">
+            Hiển Thị, Cỡ Chữ & Độ Mờ Nền Bảng
+          </h2>
+          <span className="text-[10px] text-amber-300 font-mono">0% = Mất nền</span>
+        </div>
+
+        <div className="grid grid-cols-1 gap-1.5">
+          {(
+            [
+              {
+                visKey: 'showNoticeBoardBox',
+                fontKey: 'noticeBoardFontSize',
+                opKey: 'noticeBoardOpacity',
+                defaultFont: 10,
+                defaultOp: config.hudLayout.hudOpacity ?? 0.88,
+                label: 'Bảng Thông Báo',
+              },
+              {
+                visKey: 'showGrandEventBox',
+                fontKey: 'grandEventFontSize',
+                opKey: 'grandEventOpacity',
+                defaultFont: 10,
+                defaultOp: config.hudLayout.hudOpacity ?? 0.88,
+                label: 'Bảng Đại Lễ',
+              },
+              {
+                visKey: 'showLotusLeaderboardBox',
+                fontKey: 'lotusLeaderboardFontSize',
+                opKey: 'lotusLeaderboardOpacity',
+                defaultFont: 10,
+                defaultOp: config.hudLayout.hudOpacity ?? 0.88,
+                label: 'Bảng Hoa Sen',
+              },
+              {
+                visKey: 'showGuideBox',
+                fontKey: 'guideFontSize',
+                opKey: 'guideOpacity',
+                defaultFont: 9,
+                defaultOp: config.hudLayout.hudOpacity ?? 0.88,
+                label: 'Bảng Hướng Dẫn',
+              },
+              {
+                visKey: 'showPilgrimCountBox',
+                fontKey: 'pilgrimCountFontSize',
+                opKey: 'pilgrimCountOpacity',
+                defaultFont: 10,
+                defaultOp: config.hudLayout.hudOpacity ?? 0.88,
+                label: 'Bảng Đếm Phật Tử',
+              },
+              {
+                visKey: 'showToastBox',
+                fontKey: 'toastFontSize',
+                opKey: 'toastOpacity',
+                defaultFont: 10,
+                defaultOp: config.hudLayout.hudOpacity ?? 0.88,
+                label: 'Thông Báo Trôi',
+              },
+              {
+                visKey: 'showTempleSign',
+                fontKey: null,
+                opKey: 'templeSignOpacity',
+                defaultFont: 10,
+                defaultOp: 1,
+                label: 'Bảng Tên Chùa (PNG)',
+              },
+            ] as const
+          ).map(({ visKey, fontKey, opKey, defaultFont, defaultOp, label }) => {
+            const visible = config.hudLayout[visKey] !== false;
+            const currentSize = fontKey
+              ? (config.hudLayout[fontKey] ?? defaultFont)
+              : defaultFont;
+            const curOp =
+              typeof config.hudLayout[opKey] === 'number'
+                ? (config.hudLayout[opKey] as number)
+                : defaultOp;
+            const opPercent = Math.round(curOp * 100);
+
+            return (
+              <div
+                key={visKey}
+                className={`px-2.5 py-2 rounded-lg border space-y-1.5 transition ${
+                  visible
+                    ? 'bg-stone-950/85 border-emerald-500/35'
+                    : 'bg-stone-950/40 border-stone-800/80 opacity-65'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => onUpdateHudLayout({ [visKey]: !visible })}
+                    className={`px-2 py-1 rounded-md border text-[10.5px] font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
+                      visible
+                        ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+                        : 'bg-stone-900 border-stone-700 text-stone-400'
+                    }`}
+                  >
+                    <span className="text-[9.5px] font-mono px-1 py-0.2 rounded bg-stone-950/80">
+                      {visible ? 'HIỆN' : 'ẨN'}
+                    </span>
+                    <span className="truncate">{label}</span>
+                  </button>
+
+                  {fontKey ? (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-stone-400">Cỡ:</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateHudLayout({
+                            [fontKey]: Math.max(7, currentSize - 1),
+                          })
+                        }
+                        className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer"
+                      >
+                        <Minus className="w-3 h-3" />
+                      </button>
+                      <input
+                        type="range"
+                        min={7}
+                        max={24}
+                        step={1}
+                        value={currentSize}
+                        onChange={(e) =>
+                          onUpdateHudLayout({
+                            [fontKey]: parseInt(e.target.value, 10) || defaultFont,
+                          })
+                        }
+                        className="w-16 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onUpdateHudLayout({
+                            [fontKey]: Math.min(24, currentSize + 1),
+                          })
+                        }
+                        className="w-5 h-5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer"
+                      >
+                        <Plus className="w-3 h-3" />
+                      </button>
+                      <span className="w-8 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
+                        {currentSize}px
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-stone-500 italic">PNG</span>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-800/70">
+                  <span className="text-[10px] text-stone-400">Độ mờ nền:</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => onUpdateHudLayout({ [opKey]: 0 })}
+                      className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono cursor-pointer transition ${
+                        opPercent === 0
+                          ? 'bg-amber-400 text-stone-950 font-bold'
+                          : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
+                      }`}
+                    >
+                      0%
+                    </button>
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.02}
+                      value={curOp}
+                      onChange={(e) =>
+                        onUpdateHudLayout({
+                          [opKey]: parseFloat(e.target.value),
+                        })
+                      }
+                      className="w-24 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
+                    />
+                    <span className="w-9 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
+                      {opPercent}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Pop-up người mới vào */}
+        <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold text-stone-200">
+            Pop-up: Người mới vào
+          </span>
+          <button
+            type="button"
+            onClick={() =>
+              onUpdateHudLayout({
+                showNewPilgrimToast:
+                  config.hudLayout.showNewPilgrimToast === false,
+              })
+            }
+            className={`px-2.5 py-1 rounded border text-[10.5px] font-bold cursor-pointer transition shrink-0 ${
+              config.hudLayout.showNewPilgrimToast !== false
+                ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                : 'bg-stone-900 border-stone-700 text-stone-400'
+            }`}
+          >
+            {config.hudLayout.showNewPilgrimToast !== false ? 'ĐANG BẬT' : 'ĐÃ TẮT'}
+          </button>
+        </div>
+
+        {/* Đổi tên tiêu đề các bảng */}
+        <div className="grid grid-cols-2 gap-2 pt-1">
+          <div>
+            <label className="text-[10.5px] text-stone-400 block mb-1">
+              Tiêu đề Bảng Đại Lễ:
+            </label>
+            <input
+              type="text"
+              value={config.hudLayout.grandEventTitle || 'Sự kiện Đại Lễ'}
+              onChange={(e) =>
+                onUpdateHudLayout({ grandEventTitle: e.target.value })
+              }
+              className="w-full px-2 py-1 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div>
+            <label className="text-[10.5px] text-stone-400 block mb-1">
+              Tiêu đề Đếm Phật tử:
+            </label>
+            <input
+              type="text"
+              value={config.hudLayout.pilgrimCountTitle || 'Phật tử'}
+              onChange={(e) =>
+                onUpdateHudLayout({ pilgrimCountTitle: e.target.value })
+              }
+              className="w-full px-2 py-1 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div>
+            <label className="text-[10.5px] text-stone-400 block mb-1">
+              Tiêu đề Bảng Hoa Sen:
+            </label>
+            <input
+              type="text"
+              value={config.hudLayout.lotusLeaderboardTitle || 'Bảng Hoa Sen'}
+              onChange={(e) =>
+                onUpdateHudLayout({ lotusLeaderboardTitle: e.target.value })
+              }
+              className="w-full px-2 py-1 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+          <div>
+            <label className="text-[10.5px] text-stone-400 block mb-1">
+              Tiêu đề Bảng Hướng Dẫn:
+            </label>
+            <input
+              type="text"
+              value={config.hudLayout.guideTitle}
+              onChange={(e) => onUpdateHudLayout({ guideTitle: e.target.value })}
+              className="w-full px-2 py-1 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Chỗ Ngồi, Nhân Vật & Bong Bóng Chat */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-stone-800 space-y-2.5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xs font-bold text-stone-200">
+            Chỗ Ngồi, Nhân Vật & Bong Bóng Chat
           </h2>
           <span className="text-[11px] font-mono font-bold text-emerald-400">
-            Tổng: {vipSlots.length + normalSlots.length} chỗ ({vipSlots.length} VIP +{' '}
-            {normalSlots.length} thường)
+            {vipSlots.length + normalSlots.length} chỗ ({vipSlots.length} VIP + {normalSlots.length} thường)
           </span>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* Số chỗ ngồi dọc (Số hàng ghế thường) */}
+        <div className="grid grid-cols-2 gap-2">
           <StepperCard
-            label="Số hàng ghế thường (Dọc)"
-            subLabel="Chèn khít nếu tăng dày"
+            label="Hàng ghế thường (Dọc)"
             value={config.grid.rows}
             min={1}
             onChange={(val) => onUpdateGrid({ rows: val })}
           />
 
-          {/* Số chỗ ngồi ngang (Mỗi hàng) */}
           <StepperCard
-            label="Số chỗ ngồi ngang / hàng"
-            subLabel="Chia đều 2 khu vực đỏ"
+            label="Ghế ngang / hàng"
             value={config.grid.cols}
             min={1}
             onChange={(val) => onUpdateGrid({ cols: val })}
           />
 
-          {/* Tổng số ghế VIP */}
           <StepperCard
-            label="Tổng số ghế VIP"
-            subLabel="Khu Thượng Điện"
+            label="Tổng ghế VIP"
             value={config.grid.vipCount}
             min={0}
             onChange={(val) => onUpdateGrid({ vipCount: val })}
           />
 
-          {/* Số hàng ghế VIP */}
           <StepperCard
             label="Số hàng ghế VIP"
-            subLabel="Chia đều số ghế VIP theo hàng"
             value={config.grid.vipRows ?? 1}
             min={1}
             onChange={(val) => onUpdateGrid({ vipRows: val })}
           />
         </div>
 
-        {/* Kích thước nhân vật chung (Tất cả Phật tử + Chư Tăng) */}
-        <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
+        <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800">
           <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-            <span>Kích thước nhân vật (Chung cho tất cả Phật tử & Chư Tăng)</span>
+            <span>Kích thước nhân vật</span>
             <span className="text-amber-300 font-mono tabular-nums font-bold">
-              {Math.round((config.characterScale ?? 1) * 100)}% ({(config.characterScale ?? 1).toFixed(2)}x)
+              {Math.round((config.characterScale ?? 1) * 100)}%
             </span>
           </div>
           <input
@@ -291,28 +658,21 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           />
         </div>
 
-        {/* Thẻ điều chỉnh Font tên & Kích thước thẻ tên / Font bong bóng chat & Kích thước bong bóng chat */}
-        <div className="p-2.5 rounded-lg bg-stone-900/75 border border-amber-500/35 space-y-2.5">
-          <div className="text-[11px] font-bold text-amber-300">
-            Font chữ & Kích thước: Thẻ Tên & Bong Bóng Chat
-          </div>
-
-          {/* 1. Thẻ Tên Nhân Vật */}
-          <div className="p-2 rounded-lg bg-stone-950/75 border border-stone-800 space-y-1.5">
+        <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 space-y-2">
+          <div className="space-y-1">
             <div className="flex items-center justify-between text-[11px] text-stone-200">
-              <span className="font-semibold text-amber-200">1. Thẻ tên dưới chân nhân vật</span>
+              <span className="font-semibold text-amber-200">Thẻ tên</span>
               <span className="text-amber-300 font-mono font-bold">
-                {Math.round((config.nameTagScale ?? 1) * 100)}% ({(config.nameTagScale ?? 1).toFixed(2)}x)
+                {Math.round((config.nameTagScale ?? 1) * 100)}%
               </span>
             </div>
-
             <div className="grid grid-cols-2 gap-2 items-center">
               <select
                 value={config.nameTagFontFamily || 'Inter, system-ui, sans-serif'}
                 onChange={(e) =>
                   onUpdateConfig({ nameTagFontFamily: e.target.value })
                 }
-                className="px-2 py-1 rounded bg-stone-900 border border-stone-700 text-[11px] text-stone-200 focus:outline-none focus:border-amber-500"
+                className="px-2 py-1 rounded bg-stone-900 border border-stone-700 text-[11px] text-stone-200 focus:outline-none"
               >
                 {FONT_FAMILY_OPTIONS.map((f) => (
                   <option key={f.value} value={f.value}>
@@ -320,7 +680,6 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
                   </option>
                 ))}
               </select>
-
               <input
                 type="range"
                 min={0.6}
@@ -335,22 +694,20 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             </div>
           </div>
 
-          {/* 2. Bong Bóng Chat / Lời Cầu Nguyện */}
-          <div className="p-2 rounded-lg bg-stone-950/75 border border-stone-800 space-y-1.5">
+          <div className="space-y-1 pt-1.5 border-t border-stone-800">
             <div className="flex items-center justify-between text-[11px] text-stone-200">
-              <span className="font-semibold text-amber-200">2. Bong bóng chat trên đầu</span>
+              <span className="font-semibold text-amber-200">Bong bóng chat</span>
               <span className="text-amber-300 font-mono font-bold">
-                {Math.round((config.chatBubbleScale ?? 1) * 100)}% ({(config.chatBubbleScale ?? 1).toFixed(2)}x)
+                {Math.round((config.chatBubbleScale ?? 1) * 100)}%
               </span>
             </div>
-
             <div className="grid grid-cols-2 gap-2 items-center">
               <select
                 value={config.chatBubbleFontFamily || 'Inter, system-ui, sans-serif'}
                 onChange={(e) =>
                   onUpdateConfig({ chatBubbleFontFamily: e.target.value })
                 }
-                className="px-2 py-1 rounded bg-stone-900 border border-stone-700 text-[11px] text-stone-200 focus:outline-none focus:border-amber-500"
+                className="px-2 py-1 rounded bg-stone-900 border border-stone-700 text-[11px] text-stone-200 focus:outline-none"
               >
                 {FONT_FAMILY_OPTIONS.map((f) => (
                   <option key={f.value} value={f.value}>
@@ -358,7 +715,6 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
                   </option>
                 ))}
               </select>
-
               <input
                 type="range"
                 min={0.6}
@@ -374,14 +730,13 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
         </div>
 
-        {/* Thời gian tồn tại bong bóng chat */}
-        <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
+        <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800">
           <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-            <span>Thời gian tồn tại bong bóng chat / lời cầu nguyện</span>
+            <span>Thời gian hiện bong bóng chat</span>
             <span className="text-amber-300 font-mono tabular-nums font-bold">
               {(config.chatBubbleDurationSec ?? 12) >= 60
                 ? 'Luôn hiện'
-                : `${config.chatBubbleDurationSec ?? 12} giây`}
+                : `${config.chatBubbleDurationSec ?? 12}s`}
             </span>
           </div>
           <input
@@ -397,561 +752,19 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             }
             className="w-full accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
           />
-          <div className="text-[10px] text-stone-400 mt-1">
-            Kéo lên 60s nếu muốn bong bóng chat hiển thị suốt thời gian nhân vật ở trong chùa.
-          </div>
-        </div>
-
-        {/* Thời gian ngồi trên Ghế VIP & Ghế Thường riêng biệt */}
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="p-2.5 rounded-lg bg-stone-900/60 border border-amber-500/35">
-            <div className="flex justify-between text-[11px] text-amber-200 mb-1">
-              <span className="font-bold">👑 Thời gian ngồi Ghế VIP</span>
-              <span className="text-amber-300 font-mono tabular-nums font-bold">
-                {config.vipPrayDurationSec ?? config.prayDurationSec ?? 35}s
-              </span>
-            </div>
-            <input
-              type="range"
-              min={3}
-              max={180}
-              value={Math.min(
-                180,
-                Math.max(3, config.vipPrayDurationSec ?? config.prayDurationSec ?? 35)
-              )}
-              onChange={(e) =>
-                onUpdateConfig({
-                  vipPrayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
-                })
-              }
-              className="w-full accent-amber-400 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-            />
-          </div>
-
-          <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800">
-            <div className="flex justify-between text-[11px] text-stone-300 mb-1">
-              <span className="font-bold text-emerald-300">🧘 Thời gian ngồi Ghế Thường</span>
-              <span className="text-emerald-300 font-mono tabular-nums font-bold">
-                {config.normalPrayDurationSec ?? config.prayDurationSec ?? 22}s
-              </span>
-            </div>
-            <input
-              type="range"
-              min={3}
-              max={180}
-              value={Math.min(
-                180,
-                Math.max(3, config.normalPrayDurationSec ?? config.prayDurationSec ?? 22)
-              )}
-              onChange={(e) =>
-                onUpdateConfig({
-                  normalPrayDurationSec: Math.max(3, parseInt(e.target.value, 10) || 3),
-                })
-              }
-              className="w-full accent-emerald-400 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-            />
-          </div>
         </div>
       </section>
 
-      <hr className="border-stone-800/80" />
-
-      {/* Section 3: Rename HUD Board Titles, Notice Board & Visibility */}
-      <section className="space-y-2.5">
-        <h2 className="text-xs font-semibold text-stone-200">
-          Bảng Thông Báo, Ẩn/Hiện các loại bảng & Độ mờ nền HUD
+      {/* 5. Model Quà Dâng Lễ */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-stone-800 space-y-2">
+        <h2 className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+          <Gift className="w-3.5 h-3.5 text-amber-400" />
+          <span>Model Quà Dâng Lễ</span>
         </h2>
 
-        <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <span className="text-[11px] font-semibold text-amber-300">
-              Bảng Thông Báo (Chỉnh nội dung & Cỡ chữ)
-            </span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] text-stone-400">
-                Cỡ chữ: {config.hudLayout.noticeBoardFontSize ?? 11}px
-              </span>
-              <input
-                type="range"
-                min={9}
-                max={20}
-                step={1}
-                value={config.hudLayout.noticeBoardFontSize ?? 11}
-                onChange={(e) =>
-                  onUpdateHudLayout({
-                    noticeBoardFontSize: parseInt(e.target.value, 10) || 11,
-                  })
-                }
-                className="w-20 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-              />
-            </div>
-          </div>
-
-          <input
-            type="text"
-            value={config.hudLayout.noticeBoardTitle || 'Thông Báo Nhà Chùa'}
-            onChange={(e) =>
-              onUpdateHudLayout({ noticeBoardTitle: e.target.value })
-            }
-            placeholder="Tiêu đề bảng thông báo..."
-            className="w-full px-2.5 py-1.5 rounded-lg bg-stone-950 border border-stone-800 text-xs font-semibold text-amber-200 focus:outline-none focus:border-amber-500"
-          />
-
-          <textarea
-            rows={3}
-            value={config.hudLayout.noticeBoardContent || ''}
-            onChange={(e) =>
-              onUpdateHudLayout({ noticeBoardContent: e.target.value })
-            }
-            placeholder="Nhập nội dung thông báo (hỗ trợ nhiều dòng)..."
-            className="w-full p-2 rounded-lg bg-stone-950 border border-stone-800 text-[11px] text-stone-200 focus:outline-none focus:border-amber-500 leading-relaxed"
-          />
-        </div>
-
-        <div className="p-2.5 rounded-lg bg-stone-900/60 border border-stone-800 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-stone-200">
-              Ẩn / Hiện, Cỡ chữ & Độ mờ nền riêng từng bảng (0% = Mất nền)
-            </span>
-            <span className="text-[10px] text-amber-300 font-mono">0% – 100%</span>
-          </div>
-          <div className="grid grid-cols-1 gap-2">
-            {(
-              [
-                {
-                  visKey: 'showNoticeBoardBox',
-                  fontKey: 'noticeBoardFontSize',
-                  opKey: 'noticeBoardOpacity',
-                  defaultFont: 10,
-                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
-                  label: 'Bảng Thông Báo',
-                },
-                {
-                  visKey: 'showGrandEventBox',
-                  fontKey: 'grandEventFontSize',
-                  opKey: 'grandEventOpacity',
-                  defaultFont: 10,
-                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
-                  label: 'Bảng Sự Kiện Đại Lễ',
-                },
-                {
-                  visKey: 'showLeaderboardBox',
-                  fontKey: 'leaderboardFontSize',
-                  opKey: 'leaderboardOpacity',
-                  defaultFont: 10,
-                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
-                  label: 'Bảng Công Đức (BXH)',
-                },
-                {
-                  visKey: 'showGuideBox',
-                  fontKey: 'guideFontSize',
-                  opKey: 'guideOpacity',
-                  defaultFont: 9,
-                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
-                  label: 'Bảng Hướng Dẫn',
-                },
-                {
-                  visKey: 'showPilgrimCountBox',
-                  fontKey: 'pilgrimCountFontSize',
-                  opKey: 'pilgrimCountOpacity',
-                  defaultFont: 10,
-                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
-                  label: 'Bảng Đếm Phật Tử',
-                },
-                {
-                  visKey: 'showToastBox',
-                  fontKey: 'toastFontSize',
-                  opKey: 'toastOpacity',
-                  defaultFont: 10,
-                  defaultOp: config.hudLayout.hudOpacity ?? 0.88,
-                  label: 'Bảng Toast Dâng Lễ',
-                },
-                {
-                  visKey: 'showTempleSign',
-                  fontKey: null,
-                  opKey: 'templeSignOpacity',
-                  defaultFont: 10,
-                  defaultOp: 1,
-                  label: 'Bảng Tên Chùa (PNG)',
-                },
-              ] as const
-            ).map(({ visKey, fontKey, opKey, defaultFont, defaultOp, label }) => {
-              const visible = config.hudLayout[visKey] !== false;
-              const currentSize = fontKey
-                ? (config.hudLayout[fontKey] ?? defaultFont)
-                : defaultFont;
-              const curOp =
-                typeof config.hudLayout[opKey] === 'number'
-                  ? (config.hudLayout[opKey] as number)
-                  : defaultOp;
-              const opPercent = Math.round(curOp * 100);
-
-              return (
-                <div
-                  key={visKey}
-                  className={`px-2.5 py-2 rounded-lg border space-y-1.5 transition ${
-                    visible
-                      ? 'bg-stone-950/85 border-emerald-500/35'
-                      : 'bg-stone-950/40 border-stone-800/80 opacity-65'
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => onUpdateHudLayout({ [visKey]: !visible })}
-                      className={`px-2 py-1 rounded-md border text-[10.5px] font-bold flex items-center gap-1.5 transition cursor-pointer shrink-0 ${
-                        visible
-                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
-                          : 'bg-stone-900 border-stone-700 text-stone-400'
-                      }`}
-                    >
-                      <span className="text-[9.5px] font-mono px-1 py-0.2 rounded bg-stone-950/80">
-                        {visible ? 'HIỆN' : 'ẨN'}
-                      </span>
-                      <span className="truncate">{label}</span>
-                    </button>
-
-                    {fontKey ? (
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[10px] text-stone-400 whitespace-nowrap">
-                          Cỡ chữ:
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdateHudLayout({
-                              [fontKey]: Math.max(7, currentSize - 1),
-                            })
-                          }
-                          className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer"
-                          title="Giảm cỡ chữ (-1px)"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <input
-                          type="range"
-                          min={7}
-                          max={24}
-                          step={1}
-                          value={currentSize}
-                          onChange={(e) =>
-                            onUpdateHudLayout({
-                              [fontKey]: parseInt(e.target.value, 10) || defaultFont,
-                            })
-                          }
-                          className="w-16 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onUpdateHudLayout({
-                              [fontKey]: Math.min(24, currentSize + 1),
-                            })
-                          }
-                          className="w-5 h-5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer"
-                          title="Tăng cỡ chữ (+1px)"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
-                        <span className="w-8 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
-                          {currentSize}px
-                        </span>
-                      </div>
-                    ) : (
-                      <span className="text-[10px] text-stone-500 italic">
-                        Ảnh PNG (Kéo góc chỉnh cỡ)
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Thanh chỉnh độ mờ nền riêng của bảng (0% mất nền -> 100%) */}
-                  <div className="flex items-center justify-between gap-2 pt-1 border-t border-stone-800/70">
-                    <span className="text-[10px] text-stone-400">
-                      Độ mờ nền ({opPercent === 0 ? 'Mất nền' : `${opPercent}%`}):
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                      <button
-                        type="button"
-                        onClick={() => onUpdateHudLayout({ [opKey]: 0 })}
-                        className={`px-1.5 py-0.5 rounded text-[9.5px] font-mono cursor-pointer transition ${
-                          opPercent === 0
-                            ? 'bg-amber-400 text-stone-950 font-bold'
-                            : 'bg-stone-800 hover:bg-stone-700 text-stone-300'
-                        }`}
-                        title="Chỉnh độ mờ nền về 0% (Mất nền hoàn toàn)"
-                      >
-                        0% (Mất nền)
-                      </button>
-                      <input
-                        type="range"
-                        min={0}
-                        max={1}
-                        step={0.02}
-                        value={curOp}
-                        onChange={(e) =>
-                          onUpdateHudLayout({
-                            [opKey]: parseFloat(e.target.value),
-                          })
-                        }
-                        className="w-24 accent-amber-500 h-1.5 bg-stone-800 rounded-lg cursor-pointer"
-                      />
-                      <span className="w-9 text-right text-[10.5px] font-mono font-bold text-amber-300 tabular-nums">
-                        {opPercent}%
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Tùy chọn Pop-up người mới vào & Số lượng Rank hiển thị trong Bảng Công Đức */}
-          <div className="pt-2 border-t border-stone-800 grid grid-cols-2 gap-2">
-            <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-2">
-              <span className="text-[10.5px] font-semibold text-stone-200 truncate">
-                Pop-up: Người mới vào
-              </span>
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateHudLayout({
-                    showNewPilgrimToast:
-                      config.hudLayout.showNewPilgrimToast === false,
-                  })
-                }
-                className={`px-2 py-0.5 rounded border text-[10px] font-bold cursor-pointer transition shrink-0 ${
-                  config.hudLayout.showNewPilgrimToast !== false
-                    ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
-                    : 'bg-stone-900 border-stone-700 text-stone-400'
-                }`}
-              >
-                {config.hudLayout.showNewPilgrimToast !== false ? 'ĐANG BẬT' : 'ĐÃ TẮT'}
-              </button>
-            </div>
-
-            <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-1.5">
-              <span className="text-[10.5px] font-semibold text-stone-200 truncate">
-                Số Rank BXH:
-              </span>
-              <div className="flex items-center gap-1 shrink-0">
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateHudLayout({
-                      leaderboardMaxRanks: Math.max(
-                        1,
-                        (config.hudLayout.leaderboardMaxRanks ?? 5) - 1
-                      ),
-                    })
-                  }
-                  className="w-5 h-5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer"
-                >
-                  <Minus className="w-3 h-3" />
-                </button>
-                <span className="w-10 text-center text-[10.5px] font-mono font-bold text-amber-300">
-                  Top {config.hudLayout.leaderboardMaxRanks ?? 5}
-                </span>
-                <button
-                  type="button"
-                  onClick={() =>
-                    onUpdateHudLayout({
-                      leaderboardMaxRanks: Math.min(
-                        20,
-                        (config.hudLayout.leaderboardMaxRanks ?? 5) + 1
-                      ),
-                    })
-                  }
-                  className="w-5 h-5 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer"
-                >
-                  <Plus className="w-3 h-3" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Quản lý thêm / bớt các dòng trong Bảng Hướng Dẫn */}
-        <div className="p-2.5 rounded-lg bg-stone-900/75 border border-emerald-500/35 space-y-2">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <span className="text-[11px] font-bold text-emerald-200 block">
-                📋 Thêm / Bớt các dòng trong Bảng Hướng Dẫn ({(config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS).length} dòng)
-              </span>
-              <span className="text-[10px] text-stone-400">
-                Tùy chỉnh icon lễ vật, tên mục và mô tả cho từng dòng trên Bảng Hướng Dẫn
-              </span>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button
-                type="button"
-                onClick={() => {
-                  const currentList =
-                    config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS;
-                  const nextItem: GuideTaskItem = {
-                    id: `guide-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-                    label: 'Mục mới',
-                    shortDesc: 'Nội dung hướng dẫn',
-                    modelType: 'rose',
-                    colorTheme: 'amber',
-                  };
-                  onUpdateHudLayout({ guideItems: [...currentList, nextItem] });
-                }}
-                className="px-2 py-1 rounded bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-[10px] font-extrabold flex items-center gap-1 cursor-pointer transition"
-              >
-                <Plus className="w-3 h-3" />
-                <span>Thêm dòng</span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  onUpdateHudLayout({ guideItems: DEFAULT_GUIDE_ITEMS })
-                }
-                title="Khôi phục 7 dòng hướng dẫn mặc định"
-                className="px-1.5 py-1 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 text-stone-300 text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
-
-          <div className="space-y-1.5 max-h-56 overflow-y-auto pr-0.5">
-            {(config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS).map(
-              (item, idx) => {
-                const currentList =
-                  config.hudLayout.guideItems ?? DEFAULT_GUIDE_ITEMS;
-                const updateItem = (patch: Partial<GuideTaskItem>) => {
-                  const next = currentList.map((it, i) =>
-                    i === idx ? { ...it, ...patch } : it
-                  );
-                  onUpdateHudLayout({ guideItems: next });
-                };
-                const removeItem = () => {
-                  const next = currentList.filter((_, i) => i !== idx);
-                  onUpdateHudLayout({ guideItems: next });
-                };
-
-                return (
-                  <div
-                    key={item.id || idx}
-                    className="p-1.5 rounded-lg bg-stone-950 border border-stone-800 flex items-center gap-1.5"
-                  >
-                    <select
-                      value={item.modelType || 'none'}
-                      onChange={(e) =>
-                        updateItem({
-                          modelType: e.target.value as GuideTaskItem['modelType'],
-                        })
-                      }
-                      className="px-1.5 py-1 rounded bg-stone-900 border border-stone-700 text-[10px] text-amber-300 shrink-0 focus:outline-none"
-                      title="Chọn icon lễ vật bên trái dòng"
-                    >
-                      <option value="none">Không icon</option>
-                      <option value="rose">🌹 Sen hồng</option>
-                      <option value="lotus">🪷 Sen vàng</option>
-                      <option value="tray">🍑 Mâm quả</option>
-                      <option value="special_tray">👑 Mâm đặc biệt</option>
-                      <option value="incense">🕯️ Nhang</option>
-                    </select>
-
-                    <input
-                      type="text"
-                      value={item.label}
-                      onChange={(e) => updateItem({ label: e.target.value })}
-                      placeholder="Tên quà/mục..."
-                      className="w-24 px-1.5 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] font-bold text-amber-200 focus:outline-none focus:border-amber-500 shrink-0"
-                    />
-
-                    <input
-                      type="text"
-                      value={item.shortDesc}
-                      onChange={(e) => updateItem({ shortDesc: e.target.value })}
-                      placeholder="Mô tả..."
-                      className="flex-1 min-w-0 px-1.5 py-1 rounded bg-stone-900 border border-stone-800 text-[11px] text-stone-100 focus:outline-none focus:border-amber-500"
-                    />
-
-                    <button
-                      type="button"
-                      onClick={removeItem}
-                      title="Xóa dòng này khỏi Bảng Hướng Dẫn"
-                      className="p-1 rounded bg-rose-950/60 hover:bg-rose-900 text-rose-300 border border-rose-500/30 cursor-pointer shrink-0 transition"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                );
-              }
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div>
-            <label className="text-[11px] text-stone-400 block mb-1">
-              Bảng Đại Lễ:
-            </label>
-            <input
-              type="text"
-              value={config.hudLayout.grandEventTitle || 'Sự kiện Đại Lễ'}
-              onChange={(e) =>
-                onUpdateHudLayout({ grandEventTitle: e.target.value })
-              }
-              className="w-full px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] text-stone-400 block mb-1">
-              Bảng đếm Phật tử (x/x):
-            </label>
-            <input
-              type="text"
-              value={config.hudLayout.pilgrimCountTitle || 'Phật tử'}
-              onChange={(e) =>
-                onUpdateHudLayout({ pilgrimCountTitle: e.target.value })
-              }
-              className="w-full px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] text-stone-400 block mb-1">
-              Bảng xếp hạng:
-            </label>
-            <input
-              type="text"
-              value={config.hudLayout.leaderboardTitle}
-              onChange={(e) =>
-                onUpdateHudLayout({ leaderboardTitle: e.target.value })
-              }
-              className="w-full px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-          <div>
-            <label className="text-[11px] text-stone-400 block mb-1">
-              Bảng hướng dẫn:
-            </label>
-            <input
-              type="text"
-              value={config.hudLayout.guideTitle}
-              onChange={(e) => onUpdateHudLayout({ guideTitle: e.target.value })}
-              className="w-full px-2 py-1.5 rounded-lg bg-stone-900 border border-stone-800 text-xs text-stone-100 focus:outline-none focus:border-amber-500"
-            />
-          </div>
-        </div>
-      </section>
-
-      <hr className="border-stone-800/80" />
-
-      {/* Section 4: Upload Offering Gift Models (Model Quà Dâng Lên) */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
-            <Gift className="w-3.5 h-3.5 text-amber-400" />
-            <span>Model Quà Dâng Lên (Hiển thị cạnh thẻ công việc & trên tay / mâm lễ)</span>
-          </h2>
-        </div>
-
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-stone-900 border border-amber-400/50 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-stone-950 border border-amber-400/50 flex items-center justify-center shrink-0">
               <OfferingModelArt
                 type="incense"
                 customAssets={customAssets}
@@ -960,7 +773,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             </div>
             <div className="flex-1 min-w-0">
               <AssetUploadRow
-                label="Quà 1: Nhang Trầm (Bình luận ước nguyện)"
+                label="Nhang Trầm (Comment)"
                 hasCustom={Boolean(customAssets.offeringIncenseUrl)}
                 onSelectFile={(f) => onUploadAsset('offeringIncenseUrl', f)}
                 onReset={() => onResetAsset('offeringIncenseUrl')}
@@ -969,7 +782,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-stone-900 border border-amber-400/50 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-stone-950 border border-amber-400/50 flex items-center justify-center shrink-0">
               <OfferingModelArt
                 type="rose"
                 customAssets={customAssets}
@@ -978,7 +791,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             </div>
             <div className="flex-1 min-w-0">
               <AssetUploadRow
-                label="Quà 2: Hoa Sen Hồng Vừa (Hoa hồng - 1 Coin)"
+                label="Hoa Sen Hồng (1 Xu)"
                 hasCustom={Boolean(customAssets.offeringRoseUrl)}
                 onSelectFile={(f) => onUploadAsset('offeringRoseUrl', f)}
                 onReset={() => onResetAsset('offeringRoseUrl')}
@@ -987,7 +800,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-stone-900 border border-amber-400/50 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-stone-950 border border-amber-400/50 flex items-center justify-center shrink-0">
               <OfferingModelArt
                 type="lotus"
                 customAssets={customAssets}
@@ -996,7 +809,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             </div>
             <div className="flex-1 min-w-0">
               <AssetUploadRow
-                label="Quà 3: Hoa Sen Vàng Hoàng Kim (Bắn tim - 5 Coins)"
+                label="Hoa Sen Vàng (5 Xu)"
                 hasCustom={Boolean(customAssets.offeringLotusUrl)}
                 onSelectFile={(f) => onUploadAsset('offeringLotusUrl', f)}
                 onReset={() => onResetAsset('offeringLotusUrl')}
@@ -1005,7 +818,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-stone-900 border border-amber-400/50 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-lg bg-stone-950 border border-amber-400/50 flex items-center justify-center shrink-0">
               <OfferingModelArt
                 type="tray"
                 customAssets={customAssets}
@@ -1014,7 +827,7 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
             </div>
             <div className="flex-1 min-w-0">
               <AssetUploadRow
-                label="Quà 4: Mâm Hoa Quả (Rosa 10 Coins & Đặc biệt >10 Coins)"
+                label="Mâm Hoa Quả (10+ Xu)"
                 hasCustom={Boolean(customAssets.offeringTrayUrl)}
                 onSelectFile={(f) => onUploadAsset('offeringTrayUrl', f)}
                 onReset={() => onResetAsset('offeringTrayUrl')}
@@ -1024,55 +837,51 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
         </div>
       </section>
 
-      <hr className="border-stone-800/80" />
+      {/* 6. Ảnh PNG & Spritesheet */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-stone-800 space-y-2">
+        <h2 className="text-xs font-bold text-stone-200 flex items-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+          <span>Ảnh PNG & Spritesheet</span>
+        </h2>
 
-      {/* Section 5: Upload PNG Temple Sign, Background & Horizontal Spritesheets */}
-      <section className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-xs font-semibold text-stone-200 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>Nạp ảnh thiết kế PNG & Spritesheet 1 hàng ngang</span>
-          </h2>
-        </div>
-
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           <AssetUploadRow
-            label="1. Bảng tên chùa (PNG cắt nền, không text)"
+            label="1. Bảng tên chùa (PNG)"
             hasCustom={Boolean(customAssets.templeSignPngUrl)}
             onSelectFile={(f) => onUploadAsset('templeSignPngUrl', f)}
             onReset={() => onResetAsset('templeSignPngUrl')}
           />
 
           <AssetUploadRow
-            label="2a. Spritesheet Khách Nữ (1 hàng ngang, 10 frames 0–9)"
+            label="2a. Spritesheet Khách Nữ (10 frames)"
             hasCustom={Boolean(customAssets.pilgrimFemaleSpritesheetUrl)}
             onSelectFile={(f) => onUploadAsset('pilgrimFemaleSpritesheetUrl', f)}
             onReset={() => onResetAsset('pilgrimFemaleSpritesheetUrl')}
           />
 
           <AssetUploadRow
-            label="2b. Spritesheet Khách Nam (1 hàng ngang, 10 frames 0–9)"
+            label="2b. Spritesheet Khách Nam (10 frames)"
             hasCustom={Boolean(customAssets.pilgrimMaleSpritesheetUrl)}
             onSelectFile={(f) => onUploadAsset('pilgrimMaleSpritesheetUrl', f)}
             onReset={() => onResetAsset('pilgrimMaleSpritesheetUrl')}
           />
 
           <AssetUploadRow
-            label="3. Spritesheet Sư Trụ Trì (1 hàng ngang, 8 frames 0–7)"
+            label="3. Spritesheet Sư Trụ Trì (8 frames)"
             hasCustom={Boolean(customAssets.abbotSpritesheetUrl)}
             onSelectFile={(f) => onUploadAsset('abbotSpritesheetUrl', f)}
             onReset={() => onResetAsset('abbotSpritesheetUrl')}
           />
 
           <AssetUploadRow
-            label="4. Spritesheet Chú Tiểu Lớn (1 hàng ngang, 8 frames 0–7)"
+            label="4. Spritesheet Chú Tiểu Lớn (8 frames)"
             hasCustom={Boolean(customAssets.seniorNoviceSpritesheetUrl)}
             onSelectFile={(f) => onUploadAsset('seniorNoviceSpritesheetUrl', f)}
             onReset={() => onResetAsset('seniorNoviceSpritesheetUrl')}
           />
 
           <AssetUploadRow
-            label="5. Spritesheet Chú Tiểu Nhỏ (1 hàng ngang, 8 frames 0–7)"
+            label="5. Spritesheet Chú Tiểu Nhỏ (8 frames)"
             hasCustom={Boolean(customAssets.juniorNoviceSpritesheetUrl)}
             onSelectFile={(f) => onUploadAsset('juniorNoviceSpritesheetUrl', f)}
             onReset={() => onResetAsset('juniorNoviceSpritesheetUrl')}
@@ -1087,30 +896,23 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
         </div>
       </section>
 
-      <hr className="border-stone-800/80" />
-
-      {/* Section 6: Save / Load JSON Layout & Full Studio Backup */}
-      <section className="p-3 rounded-xl bg-stone-900/70 border border-emerald-500/40 space-y-2.5">
+      {/* 7. Lưu / Nạp JSON Map */}
+      <section className="p-3 rounded-xl bg-stone-900/75 border border-emerald-500/40 space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-xs font-bold text-emerald-300">
-              Lưu / Nạp File Cấu Hình & Tọa Độ Map (.json)
-            </h2>
-            <p className="text-[10.5px] text-stone-400">
-              Xuất ra file .json hoặc nạp lại file .json đã lưu trước đó
-            </p>
-          </div>
+          <h2 className="text-xs font-bold text-emerald-300">
+            Dữ Liệu JSON Cấu Hình
+          </h2>
           <button
             type="button"
             onClick={handleCopyJson}
-            className="px-2.5 py-1 rounded-md bg-stone-900 hover:bg-stone-800 border border-stone-700 text-[11px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer shrink-0"
+            className="px-2 py-1 rounded-md bg-stone-950 hover:bg-stone-800 border border-stone-700 text-[10.5px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer shrink-0"
           >
             {copiedJson ? (
               <Check className="w-3 h-3 text-emerald-400" />
             ) : (
               <Copy className="w-3 h-3" />
             )}
-            <span>{copiedJson ? 'Đã sao chép JSON' : 'Sao chép JSON'}</span>
+            <span>{copiedJson ? 'Đã chép' : 'Chép chuỗi JSON'}</span>
           </button>
         </div>
 
@@ -1121,19 +923,19 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
               onSaveBackupJson();
               setJsonStatus({
                 ok: true,
-                text: 'Đã tải xuống file sao lưu .json thành công!',
+                text: 'Đã tải xuống file .json!',
               });
               setTimeout(() => setJsonStatus(null), 4000);
             }}
-            className="py-2 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer shadow-sm"
+            className="py-1.5 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-stone-950 text-xs font-extrabold flex items-center justify-center gap-1.5 transition cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Save JSON (Tải file .json)</span>
+            <span>Tải file .json</span>
           </button>
 
-          <label className="py-2 px-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/50 text-cyan-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer">
+          <label className="py-1.5 px-3 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/50 text-cyan-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer">
             <Upload className="w-3.5 h-3.5 text-cyan-300" />
-            <span>Load JSON (Chọn file .json)</span>
+            <span>Chọn file .json</span>
             <input
               type="file"
               accept=".json,application/json"
@@ -1155,33 +957,22 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
           </div>
         )}
 
-        <div className="space-y-1.5 pt-1">
-          <span className="text-[10.5px] text-stone-400 block">
-            Dữ liệu JSON hiện tại (Có thể copy hoặc dán chuỗi JSON vào ô dưới để nạp nhanh):
-          </span>
-          <textarea
-            readOnly
-            rows={3}
-            value={exportJsonString}
-            className="w-full p-2 rounded-lg bg-stone-950 border border-stone-800 text-[10px] font-mono text-stone-400 focus:outline-none"
+        <div className="flex items-center gap-1.5 pt-1">
+          <input
+            type="text"
+            value={pasteJsonText}
+            onChange={(e) => setPasteJsonText(e.target.value)}
+            placeholder="Dán chuỗi JSON vào đây..."
+            className="flex-1 px-2.5 py-1.5 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-200 focus:outline-none focus:border-cyan-400"
           />
-          <div className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={pasteJsonText}
-              onChange={(e) => setPasteJsonText(e.target.value)}
-              placeholder="Hoặc dán chuỗi JSON đã copy vào đây..."
-              className="flex-1 px-2.5 py-1.5 rounded-lg bg-stone-950 border border-stone-800 text-xs text-stone-200 focus:outline-none focus:border-cyan-400"
-            />
-            <button
-              type="button"
-              onClick={handleApplyPastedJson}
-              disabled={!pasteJsonText.trim()}
-              className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-stone-950 text-xs font-bold cursor-pointer transition shrink-0"
-            >
-              Nạp JSON vừa dán
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleApplyPastedJson}
+            disabled={!pasteJsonText.trim()}
+            className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 disabled:opacity-40 text-stone-950 text-xs font-bold cursor-pointer transition shrink-0"
+          >
+            Nạp
+          </button>
         </div>
       </section>
     </div>
@@ -1190,7 +981,6 @@ export const TabMapEditor: React.FC<TabMapEditorProps> = React.memo(({
 
 interface StepperCardProps {
   label: string;
-  subLabel: string;
   value: number;
   min: number;
   onChange: (nextVal: number) => void;
@@ -1198,27 +988,22 @@ interface StepperCardProps {
 
 const StepperCard: React.FC<StepperCardProps> = ({
   label,
-  subLabel,
   value,
   min,
   onChange,
 }) => (
-  <div className="p-2.5 rounded-lg bg-stone-900/70 border border-stone-800 flex flex-col justify-between gap-2">
-    <div>
-      <div className="text-[11px] font-bold text-stone-200 leading-tight">
-        {label}
-      </div>
-      <div className="text-[9.5px] text-stone-400">{subLabel}</div>
-    </div>
+  <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-2">
+    <span className="text-[11px] font-bold text-stone-200 truncate">
+      {label}
+    </span>
 
-    <div className="flex items-center justify-between gap-1">
+    <div className="flex items-center gap-1 shrink-0">
       <button
         type="button"
         onClick={() => onChange(Math.max(min, value - 1))}
-        className="w-7 h-7 rounded-md bg-stone-800 hover:bg-stone-700 active:scale-95 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer transition"
-        title="Giảm (-1)"
+        className="w-6 h-6 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 flex items-center justify-center text-stone-200 cursor-pointer transition"
       >
-        <Minus className="w-3.5 h-3.5" />
+        <Minus className="w-3 h-3" />
       </button>
 
       <input
@@ -1229,16 +1014,15 @@ const StepperCard: React.FC<StepperCardProps> = ({
           const parsed = parseInt(e.target.value, 10);
           onChange(Number.isNaN(parsed) ? min : Math.max(min, parsed));
         }}
-        className="w-12 text-center bg-stone-950 border border-stone-800 rounded py-1 text-xs font-mono font-bold text-amber-300 focus:outline-none focus:border-amber-500"
+        className="w-10 text-center bg-stone-900 border border-stone-800 rounded py-0.5 text-xs font-mono font-bold text-amber-300 focus:outline-none"
       />
 
       <button
         type="button"
         onClick={() => onChange(value + 1)}
-        className="w-7 h-7 rounded-md bg-amber-500/20 hover:bg-amber-500/35 active:scale-95 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer transition"
-        title="Tăng (+1 không giới hạn)"
+        className="w-6 h-6 rounded bg-amber-500/20 hover:bg-amber-500/35 border border-amber-500/40 flex items-center justify-center text-amber-300 cursor-pointer transition"
       >
-        <Plus className="w-3.5 h-3.5" />
+        <Plus className="w-3 h-3" />
       </button>
     </div>
   </div>
@@ -1257,10 +1041,10 @@ const AssetUploadRow: React.FC<AssetUploadRowProps> = ({
   onSelectFile,
   onReset,
 }) => (
-  <div className="p-2 rounded-lg bg-stone-900/60 border border-stone-800 flex items-center justify-between gap-2">
+  <div className="p-2 rounded-lg bg-stone-950/80 border border-stone-800 flex items-center justify-between gap-2">
     <span className="text-[11px] text-stone-200 font-medium truncate">{label}</span>
     <div className="flex items-center gap-1.5 shrink-0">
-      <label className="px-2.5 py-1 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 text-[11px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer transition">
+      <label className="px-2 py-0.5 rounded bg-stone-800 hover:bg-stone-700 border border-stone-700 text-[10.5px] font-semibold text-amber-300 flex items-center gap-1 cursor-pointer transition">
         <ImagePlus className="w-3 h-3" />
         <span>Chọn PNG</span>
         <input
@@ -1277,7 +1061,6 @@ const AssetUploadRow: React.FC<AssetUploadRowProps> = ({
         <button
           type="button"
           onClick={onReset}
-          title="Khôi phục mặc định"
           className="p-1 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 cursor-pointer"
         >
           <RotateCcw className="w-3 h-3" />
@@ -1286,4 +1069,3 @@ const AssetUploadRow: React.FC<AssetUploadRowProps> = ({
     </div>
   </div>
 );
-
