@@ -1,5 +1,5 @@
 import React from 'react';
-import { getCharacterDepthScale } from '../../config/constants';
+import { DEFAULT_SPRITESHEETS, getCharacterDepthScale } from '../../config/constants';
 import { useProcessedSpriteFrames } from '../../services/spriteProcessor';
 import { CustomAssetsConfig, PilgrimData, PilgrimFrameIndex, Point2D } from '../../types/game';
 import { OfferingModelArt } from './OfferingModelArt';
@@ -207,11 +207,19 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
       return avatarUrl;
     }, [avatarUrl, avatarStage]);
 
-    const sheetUrl =
+    const defaultSheetUrl =
       gender === 'female'
+        ? DEFAULT_SPRITESHEETS.pilgrimFemaleSpritesheetUrl
+        : DEFAULT_SPRITESHEETS.pilgrimMaleSpritesheetUrl;
+    const sheetUrl =
+      (gender === 'female'
         ? customAssets.pilgrimFemaleSpritesheetUrl
-        : customAssets.pilgrimMaleSpritesheetUrl;
-    const processedFrames = useProcessedSpriteFrames(sheetUrl, 10);
+        : customAssets.pilgrimMaleSpritesheetUrl) || defaultSheetUrl;
+    const processedFrames = useProcessedSpriteFrames(
+      sheetUrl,
+      10,
+      defaultSheetUrl
+    );
 
     // Phối cảnh chiều sâu đồng bộ nhân với hệ số size nhân vật chung (characterScale)
     const depthScale = getCharacterDepthScale(y);
@@ -374,20 +382,32 @@ export const PilgrimSprite: React.FC<PilgrimSpriteProps> = React.memo(
             </div>
           )}
 
-          {/* Khung hiển thị Nhân vật */}
+          {/* Khung hiển thị Nhân vật (Luôn đảm bảo fallback về ảnh baked tĩnh nếu ảnh custom bị lỗi hoặc rỗng) */}
           <div
             className="relative w-full h-full flex items-end justify-center"
             style={{
               transform: `scaleX(${flipX})`,
             }}
           >
-            {processedFrames && processedFrames[frameIndex] ? (
-              <img
-                src={processedFrames[frameIndex]}
-                alt=""
-                className="w-full h-full object-contain"
-              />
-            ) : null}
+            <img
+              src={
+                (processedFrames && processedFrames[frameIndex]) ||
+                (gender === 'female'
+                  ? `./assets/aistudio/baked/pilgrim_female_f${frameIndex}.png`
+                  : `./assets/aistudio/baked/pilgrim_male_f${frameIndex}.png?v=6`)
+              }
+              alt=""
+              className="w-full h-full object-contain"
+              onError={(e) => {
+                const fallback =
+                  gender === 'female'
+                    ? `./assets/aistudio/baked/pilgrim_female_f${frameIndex}.png`
+                    : `./assets/aistudio/baked/pilgrim_male_f${frameIndex}.png?v=6`;
+                if (!e.currentTarget.src.endsWith(fallback.replace('./', '/'))) {
+                  e.currentTarget.src = fallback;
+                }
+              }}
+            />
 
             {/* Model lễ vật đặt trên 2 tay vươn lên khi đi vào (Frame 7) */}
             {showOfferingOnHands && (

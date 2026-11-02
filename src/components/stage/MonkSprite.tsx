@@ -1,5 +1,5 @@
 import React from 'react';
-import { getCharacterDepthScale } from '../../config/constants';
+import { DEFAULT_SPRITESHEETS, getCharacterDepthScale } from '../../config/constants';
 import { useProcessedSpriteFrames } from '../../services/spriteProcessor';
 import { MonkFrameIndex, TempleMonkData } from '../../types/game';
 
@@ -73,14 +73,24 @@ export const MonkSprite: React.FC<MonkSpriteProps> = React.memo(
       woodenFishRippleUntil,
     } = monk;
     const isAbbot = role === 'abbot';
-    const sheetUrl =
+    const defaultSheetUrl =
       role === 'abbot'
+        ? DEFAULT_SPRITESHEETS.abbotSpritesheetUrl
+        : role === 'senior_novice'
+        ? DEFAULT_SPRITESHEETS.seniorNoviceSpritesheetUrl
+        : DEFAULT_SPRITESHEETS.juniorNoviceSpritesheetUrl;
+    const sheetUrl =
+      (role === 'abbot'
         ? abbotSpritesheetUrl
         : role === 'senior_novice'
         ? seniorNoviceSpritesheetUrl
-        : juniorNoviceSpritesheetUrl;
+        : juniorNoviceSpritesheetUrl) || defaultSheetUrl;
 
-    const processedFrames = useProcessedSpriteFrames(sheetUrl, 8);
+    const processedFrames = useProcessedSpriteFrames(
+      sheetUrl,
+      8,
+      defaultSheetUrl
+    );
     const frameIndex = getMonkFrameIndex(monk);
     const isSide = frameIndex >= 4;
     const flipX = isSide && facingLeft ? -1 : 1;

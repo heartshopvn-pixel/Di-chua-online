@@ -74,8 +74,14 @@ function sanitizeAssetUrl(
 ): string | null {
   if (typeof val !== 'string' || !val.trim()) return defaultUrl;
   const trimmed = val.trim();
-  // Dead blob: URLs from previous page sessions cannot survive F5
-  if (trimmed.startsWith('blob:')) return defaultUrl;
+  // Dead blob: URLs or placeholder markers cannot render as images
+  if (
+    trimmed.startsWith('blob:') ||
+    trimmed === '__KEEP_BROWSER_IMAGE_DATA__' ||
+    trimmed === '__KEEP_BROWSER_AUDIO_DATA__'
+  ) {
+    return defaultUrl;
+  }
   // Normalize absolute /assets/... to relative ./assets/... for GitHub Pages subpath
   if (trimmed.startsWith('/assets/')) return `.${trimmed}`;
   return trimmed;
@@ -746,8 +752,35 @@ export function useTempleEngine() {
       setNpcAvatars(savedAvatars);
       npcAvatarsRef.current = savedAvatars;
     });
+
+    // Tự động mở link báo chuông sau 5s khi hoàn thành cập nhật/tải lại trên tab Admin (không chạy trên ?obs=1)
+    const BUILD_NOTIFY_KEY = 'temple_build_done_ring_v3';
+    const isObsClient =
+      typeof window !== 'undefined' &&
+      (new URLSearchParams(window.location.search).get('obs') === '1' ||
+        new URLSearchParams(window.location.search).get('view') === 'live' ||
+        new URLSearchParams(window.location.search).get('mode') === 'live');
+    let ringTimer: ReturnType<typeof setTimeout> | null = null;
+    if (!isObsClient && typeof window !== 'undefined') {
+      try {
+        if (sessionStorage.getItem(BUILD_NOTIFY_KEY) !== '1') {
+          ringTimer = setTimeout(() => {
+            try {
+              sessionStorage.setItem(BUILD_NOTIFY_KEY, '1');
+            } catch {
+              // ignore
+            }
+            syncService.triggerFocusTimerAlert(true);
+          }, 5000);
+        }
+      } catch {
+        // ignore
+      }
+    }
+
     return () => {
       mounted = false;
+      if (ringTimer) clearTimeout(ringTimer);
     };
   }, []);
 
@@ -3415,7 +3448,9 @@ export function useTempleEngine() {
         }
         case 'UPDATE_CUSTOM_ASSETS': {
           if (payload.customAssets && typeof payload.customAssets === 'object') {
-            setCustomAssets((prev) => ({ ...prev, ...payload.customAssets }));
+            setCustomAssets((prev) =>
+              sanitizeCustomAssets({ ...prev, ...payload.customAssets })
+            );
           }
           break;
         }
@@ -3494,7 +3529,9 @@ export function useTempleEngine() {
             setNormalSlots([...freshNorm]);
           }
           if (data.customAssets) {
-            setCustomAssets((prev) => ({ ...prev, ...data.customAssets }));
+            setCustomAssets((prev) =>
+              sanitizeCustomAssets({ ...prev, ...data.customAssets })
+            );
           }
           if (Array.isArray(data.npcNames) && data.npcNames.length > 0) {
             setNpcNames(data.npcNames);
@@ -4388,10 +4425,12 @@ export function useTempleEngine() {
         }
 
         if (parsed.customAssets && typeof parsed.customAssets === 'object') {
-          setCustomAssets((prev) => ({
-            ...prev,
-            ...parsed.customAssets,
-          }));
+          setCustomAssets((prev) =>
+            sanitizeCustomAssets({
+              ...prev,
+              ...parsed.customAssets,
+            })
+          );
         }
 
         if (parsed.safetyActionMode) {

@@ -555,37 +555,64 @@ export function processHorizontalSpritesheet(
   return promise;
 }
 
-export function useProcessedSpriteFrames(
-  url: string | null,
+export function getStaticBakedFrames(
+  url: string | null | undefined,
   expectedFrames: number
 ): string[] | null {
+  if (!url) return null;
+  if (BAKED_STATIC_FRAMES[url] && BAKED_STATIC_FRAMES[url].length === expectedFrames) {
+    return BAKED_STATIC_FRAMES[url];
+  }
+  const normalized = url.startsWith('/assets/') ? `.${url}` : url;
+  if (
+    BAKED_STATIC_FRAMES[normalized] &&
+    BAKED_STATIC_FRAMES[normalized].length === expectedFrames
+  ) {
+    return BAKED_STATIC_FRAMES[normalized];
+  }
+  return null;
+}
+
+export function useProcessedSpriteFrames(
+  url: string | null,
+  expectedFrames: number,
+  fallbackUrl?: string | null
+): string[] | null {
+  const defaultStatic = getStaticBakedFrames(fallbackUrl, expectedFrames);
+
   const [frames, setFrames] = useState<string[] | null>(() => {
-    if (!url) return null;
-    if (BAKED_STATIC_FRAMES[url] && BAKED_STATIC_FRAMES[url].length === expectedFrames) {
-      return BAKED_STATIC_FRAMES[url];
+    const directBaked = getStaticBakedFrames(url, expectedFrames);
+    if (directBaked) return directBaked;
+    if (url) {
+      const cached = processedCache.get(`${CACHE_VERSION}::${url}::${expectedFrames}`);
+      if (cached && cached.length === expectedFrames) return cached;
     }
-    return processedCache.get(`${CACHE_VERSION}::${url}::${expectedFrames}`) || null;
+    return defaultStatic;
   });
 
   useEffect(() => {
-    if (!url) {
-      setFrames(null);
+    const directBaked = getStaticBakedFrames(url, expectedFrames);
+    if (directBaked) {
+      setFrames(directBaked);
       return;
     }
-    if (BAKED_STATIC_FRAMES[url] && BAKED_STATIC_FRAMES[url].length === expectedFrames) {
-      setFrames(BAKED_STATIC_FRAMES[url]);
+    if (!url) {
+      setFrames(defaultStatic);
       return;
     }
     let cancelled = false;
     processHorizontalSpritesheet(url, expectedFrames).then((res) => {
-      if (!cancelled && res.length === expectedFrames) {
+      if (cancelled) return;
+      if (res && res.length === expectedFrames) {
         setFrames(res);
+      } else if (defaultStatic) {
+        setFrames(defaultStatic);
       }
     });
     return () => {
       cancelled = true;
     };
-  }, [url, expectedFrames]);
+  }, [url, expectedFrames, defaultStatic]);
 
-  return frames;
+  return frames || defaultStatic;
 }
