@@ -184,8 +184,8 @@ class LiveSyncService {
 
   private stripHeavyDataUrls(obj: any): any {
     if (typeof obj === 'string') {
-      // Chỉ lược bỏ file nhạc MP3 base64 nặng (data:audio/...), tuyệt đối giữ nguyên data:image/... của nhân vật
-      return obj.startsWith('data:audio/') && obj.length > 512 * 1024 ? null : obj;
+      // Cho phép đồng bộ đầy đủ cả file nhạc MP3 (data:audio/...) và ảnh nhân vật (data:image/...) lên tới 45MB sang màn hình Live
+      return obj.startsWith('data:audio/') && obj.length > 45 * 1024 * 1024 ? null : obj;
     }
     if (Array.isArray(obj)) {
       return obj.map((item) => this.stripHeavyDataUrls(item));
@@ -217,7 +217,7 @@ class LiveSyncService {
     }
 
     let serializedPacket = JSON.stringify(packet);
-    if (serializedPacket.length > 1024 * 1024) {
+    if (serializedPacket.length > 45 * 1024 * 1024) {
       serializedPacket = JSON.stringify(this.stripHeavyDataUrls(packet));
     }
 

@@ -527,7 +527,7 @@ app.listen(3000, () => console.log('Server Giọng Đọc AI đang chạy tại:
 const TIKTOK_USERNAME = "ten_id_tiktok_cua_ban"; // Đổi thành ID TikTok đang Live (không có chữ @)
 const SIGN_API_KEY = ""; // (Tùy chọn) Dán API Key miễn phí từ https://www.eulerstream.com nếu bị lỗi 403 SignatureError
 
-const wss = new WebSocketServer({ port: 8080 });
+const wss = new WebSocketServer({ port: 8080, maxPayload: 100 * 1024 * 1024 });
 const tiktok = new TikTokConnector(TIKTOK_USERNAME, {
   enableExtendedGiftInfo: false,
   ...(SIGN_API_KEY ? { signApiKey: SIGN_API_KEY } : {})
@@ -602,11 +602,13 @@ function getUserAvatar(data) {
 
 let lastBackupSync = null;
 let lastHudLayoutSync = null;
+let lastConfigSync = null;
 
 wss.on('connection', ws => {
-  // Gửi ngay bố cục & cấu hình mới nhất từ Chrome cho màn hình Live vừa kết nối
+  // Gửi ngay bố cục, cấu hình âm thanh & nhân vật mới nhất từ Chrome cho màn hình Live vừa kết nối
   try {
     if (lastBackupSync && ws.readyState === 1) ws.send(JSON.stringify(lastBackupSync));
+    if (lastConfigSync && ws.readyState === 1) ws.send(JSON.stringify(lastConfigSync));
     if (lastHudLayoutSync && ws.readyState === 1) ws.send(JSON.stringify(lastHudLayoutSync));
   } catch (e) {}
 
@@ -615,6 +617,7 @@ wss.on('connection', ws => {
       const msg = JSON.parse(raw);
       if (msg.type === 'ADMIN_SYNC') {
         if (msg.action === 'RESTORE_BACKUP') lastBackupSync = msg;
+        if (msg.action === 'UPDATE_CONFIG') lastConfigSync = msg;
         if (msg.action === 'UPDATE_HUD_LAYOUT') lastHudLayoutSync = msg;
         broadcast(msg, ws);
       }

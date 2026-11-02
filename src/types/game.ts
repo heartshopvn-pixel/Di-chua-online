@@ -302,6 +302,7 @@ export interface PilgrimData {
   chatBubbleUntil?: number;
   manualMoveDir?: 'up' | 'down' | 'left' | 'right' | 'idle' | 'wooden_fish';
   woodenFishRippleUntil?: number;
+  hasSatOnce?: boolean;
 }
 
 export interface BurnerLotusBurstFX {
@@ -479,6 +480,10 @@ export interface SyncPacket {
     | 'TRIGGER_FOLLOW'
     | 'TRIGGER_GRAND_EVENT'
     | 'ENTITY_CHAT'
+    | 'CONTROL_STATE'
+    | 'NPC_PRAY_EVENT'
+    | 'NEXT_DHARMA'
+    | 'CLEAR_TTS_QUEUE'
     | 'CLEAR_DONORS'
     | 'UPDATE_CUSTOM_ASSETS'
     | 'REQUEST_FULL_SYNC'

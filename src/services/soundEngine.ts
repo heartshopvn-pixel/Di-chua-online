@@ -84,6 +84,26 @@ class TempleSoundService {
     return sessionStorage.getItem('chua_silent_admin_tab') === 'true';
   })();
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      const unlockAudio = () => {
+        try {
+          if (this.ctx && this.ctx.state === 'suspended') {
+            void this.ctx.resume();
+          }
+          if (this.bgmAudio && this.bgmAudio.paused && this.latestConfig?.bgmEnabled && !this.localTabMuted) {
+            void this.bgmAudio.play().catch(() => {});
+          }
+        } catch {
+          // Ignore
+        }
+      };
+      window.addEventListener('pointerdown', unlockAudio, { passive: true });
+      window.addEventListener('keydown', unlockAudio, { passive: true });
+      window.addEventListener('touchstart', unlockAudio, { passive: true });
+    }
+  }
+
   private initCtx() {
     if (!this.ctx) {
       const AudioCtx =
@@ -347,10 +367,10 @@ class TempleSoundService {
     }
   }
 
-  public playBell(volume = 1.0, customMp3Url?: string | null) {
+  public playBell(volume = 1.0, customMp3Url?: string | null, forcePlay = false) {
     if (this.localTabMuted) return;
     const cfg = this.latestConfig;
-    if (cfg && !cfg.bellEnabled) return;
+    if (!forcePlay && cfg && !cfg.bellEnabled) return;
 
     const mp3Url = customMp3Url !== undefined ? customMp3Url : cfg?.bellMp3Url;
     if (mp3Url) {
@@ -391,10 +411,10 @@ class TempleSoundService {
     }
   }
 
-  public playWoodenFish(volume = 1.0, customMp3Url?: string | null) {
+  public playWoodenFish(volume = 1.0, customMp3Url?: string | null, forcePlay = false) {
     if (this.localTabMuted) return;
     const cfg = this.latestConfig;
-    if (cfg && !cfg.woodenFishEnabled) return;
+    if (!forcePlay && cfg && !cfg.woodenFishEnabled) return;
 
     const mp3Url =
       customMp3Url !== undefined ? customMp3Url : cfg?.woodenFishMp3Url;
