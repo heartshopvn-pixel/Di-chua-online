@@ -182,6 +182,23 @@ class LiveSyncService {
     return this.status;
   }
 
+  private stripHeavyDataUrls(obj: any): any {
+    if (typeof obj === 'string') {
+      return obj.startsWith('data:') && obj.length > 512 * 1024 ? null : obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.stripHeavyDataUrls(item));
+    }
+    if (obj && typeof obj === 'object') {
+      const out: Record<string, any> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        out[k] = this.stripHeavyDataUrls(v);
+      }
+      return out;
+    }
+    return obj;
+  }
+
   public sendCommand(action: SyncPacket['action'], payload: Record<string, any> = {}) {
     const packet: SyncPacket = {
       type: 'ADMIN_SYNC',
@@ -198,32 +215,17 @@ class LiveSyncService {
       // Ignore
     }
 
+    let serializedPacket = JSON.stringify(packet);
+    if (serializedPacket.length > 1024 * 1024) {
+      serializedPacket = JSON.stringify(this.stripHeavyDataUrls(packet));
+    }
+
     // 2. Cloud/Server Relay to OBS Browser Source or separate browser windows
     if (!this.isStaticHost()) {
-      let bodyStr = JSON.stringify({ senderId: this.clientId, packet });
-      // Prevent PayloadTooLargeError when syncing multi-megabyte base64 MP3 tracks over HTTP relay
-      if (bodyStr.length > 8 * 1024 * 1024) {
-        const stripHeavyDataUrls = (obj: any): any => {
-          if (typeof obj === 'string') {
-            return obj.startsWith('data:') && obj.length > 512 * 1024 ? null : obj;
-          }
-          if (Array.isArray(obj)) {
-            return obj.map(stripHeavyDataUrls);
-          }
-          if (obj && typeof obj === 'object') {
-            const out: Record<string, any> = {};
-            for (const [k, v] of Object.entries(obj)) {
-              out[k] = stripHeavyDataUrls(v);
-            }
-            return out;
-          }
-          return obj;
-        };
-        bodyStr = JSON.stringify({
-          senderId: this.clientId,
-          packet: stripHeavyDataUrls(packet),
-        });
-      }
+      const bodyStr = JSON.stringify({
+        senderId: this.clientId,
+        packet: JSON.parse(serializedPacket),
+      });
 
       fetch('/api/sync-command', {
         method: 'POST',
@@ -234,10 +236,10 @@ class LiveSyncService {
       });
     }
 
-    // 3. Optional local Node.js WebSocket bridge
+    // 3. Local Node.js WebSocket bridge (ws://localhost:8080) for cross-browser Chrome <-> TikTok Live Studio
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       try {
-        this.ws.send(JSON.stringify(packet));
+        this.ws.send(serializedPacket);
       } catch {
         // Ignore
       }
@@ -264,6 +266,12 @@ class LiveSyncService {
       socket.onopen = () => {
         this.wasWsConnectedOnce = true;
         this.setStatus('connected');
+        // Khi kết nối WebSocket thành công, nếu đây là màn hình Live (?obs=1) thì lập tức xin đồng bộ toàn bộ vị trí bảng & cấu hình từ Chrome
+        if (this.isObsView()) {
+          setTimeout(() => {
+            this.sendCommand('REQUEST_FULL_SYNC', {});
+          }, 120);
+        }
       };
 
       const extractAvatar = (obj: any): string | null => {

@@ -600,11 +600,24 @@ function getUserAvatar(data) {
   return null;
 }
 
+let lastBackupSync = null;
+let lastHudLayoutSync = null;
+
 wss.on('connection', ws => {
+  // Gửi ngay bố cục & cấu hình mới nhất từ Chrome cho màn hình Live vừa kết nối
+  try {
+    if (lastBackupSync && ws.readyState === 1) ws.send(JSON.stringify(lastBackupSync));
+    if (lastHudLayoutSync && ws.readyState === 1) ws.send(JSON.stringify(lastHudLayoutSync));
+  } catch (e) {}
+
   ws.on('message', raw => {
     try {
       const msg = JSON.parse(raw);
-      if (msg.type === 'ADMIN_SYNC') broadcast(msg, ws);
+      if (msg.type === 'ADMIN_SYNC') {
+        if (msg.action === 'RESTORE_BACKUP') lastBackupSync = msg;
+        if (msg.action === 'UPDATE_HUD_LAYOUT') lastHudLayoutSync = msg;
+        broadcast(msg, ws);
+      }
     } catch (e) {}
   });
 });

@@ -169,6 +169,7 @@ export default function App() {
           onClearCameraQueue={engine.handleClearCameraQueue}
           onRemoveCameraQueueItem={engine.handleRemoveCameraQueueItem}
           onFocusPilgrimNow={engine.handleFocusPilgrimNow}
+          onPushFullSyncToLive={engine.handlePushFullSyncToLive}
         />
       )}
     </div>

@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   MapPin,
   Radio,
+  RefreshCw,
   Tv,
   Upload,
   Volume2,
@@ -135,6 +136,7 @@ interface DevStudioProps {
   onClearCameraQueue: () => void;
   onRemoveCameraQueueItem: (queueId: string) => void;
   onFocusPilgrimNow: (pilgrimId: number) => void;
+  onPushFullSyncToLive?: () => void;
 }
 
 export const DevStudio: React.FC<DevStudioProps> = ({
@@ -213,8 +215,10 @@ export const DevStudio: React.FC<DevStudioProps> = ({
   onClearCameraQueue,
   onRemoveCameraQueueItem,
   onFocusPilgrimNow,
+  onPushFullSyncToLive,
 }) => {
   const [copiedObsLink, setCopiedObsLink] = useState(false);
+  const [pushedLiveSync, setPushedLiveSync] = useState(false);
   const [backupNotice, setBackupNotice] = useState<{
     ok: boolean;
     text: string;
@@ -353,24 +357,51 @@ export const DevStudio: React.FC<DevStudioProps> = ({
             </span>
           </div>
 
-          <button
-            type="button"
-            onClick={handleCopyObsLink}
-            title="Sao chép link chỉ hiển thị màn hình Game 9:16 để dán vào OBS hoặc tab thứ 2"
-            className="px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
-          >
-            {copiedObsLink ? (
-              <>
-                <Check className="w-3 h-3" />
-                <span>Đã chép Link OBS</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-3 h-3" />
-                <span>Copy Link OBS (?obs=1)</span>
-              </>
+          <div className="flex items-center gap-1 shrink-0">
+            {onPushFullSyncToLive && (
+              <button
+                type="button"
+                onClick={() => {
+                  onPushFullSyncToLive();
+                  setPushedLiveSync(true);
+                  setTimeout(() => setPushedLiveSync(false), 2000);
+                }}
+                title="Đẩy ngay lập tức toàn bộ vị trí bảng, ghế ngồi và cấu hình hiện tại từ trình duyệt này sang màn hình TikTok Live Studio mà không cần copy lại link"
+                className="px-2 py-1 rounded-md bg-cyan-500 hover:bg-cyan-400 text-stone-950 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
+              >
+                {pushedLiveSync ? (
+                  <>
+                    <Check className="w-3 h-3" />
+                    <span>Đã đẩy sang Live!</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="w-3 h-3" />
+                    <span>Đồng bộ Live</span>
+                  </>
+                )}
+              </button>
             )}
-          </button>
+
+            <button
+              type="button"
+              onClick={handleCopyObsLink}
+              title="Sao chép link chỉ hiển thị màn hình Game 9:16 để dán vào OBS hoặc tab thứ 2"
+              className="px-2.5 py-1 rounded-md bg-amber-500 hover:bg-amber-400 text-stone-950 text-[11px] font-bold flex items-center gap-1 shrink-0 transition cursor-pointer whitespace-nowrap"
+            >
+              {copiedObsLink ? (
+                <>
+                  <Check className="w-3 h-3" />
+                  <span>Đã chép Link OBS</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span>Copy Link OBS (?obs=1)</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-stone-800/80">

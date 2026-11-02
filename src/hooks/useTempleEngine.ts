@@ -891,6 +891,40 @@ export function useTempleEngine() {
     });
     const unsubWs = syncService.onStatusChange((st) => {
       setWsStatus(st);
+      const isObsClient =
+        typeof window !== 'undefined' &&
+        (new URLSearchParams(window.location.search).get('obs') === '1' ||
+          new URLSearchParams(window.location.search).get('view') === 'live' ||
+          new URLSearchParams(window.location.search).get('mode') === 'live');
+      if (!isObsClient && st === 'connected') {
+        setTimeout(() => {
+          syncService.sendCommand('RESTORE_BACKUP', {
+            config: configRef.current,
+            vipSlots: vipSlotsRef.current.map((s) => ({
+              id: s.id,
+              x: s.x,
+              y: s.y,
+              side: s.side,
+            })),
+            normalSlots: normalSlotsRef.current.map((s) => ({
+              id: s.id,
+              x: s.x,
+              y: s.y,
+              side: s.side,
+              row: s.row,
+              col: s.col,
+            })),
+            npcNames: npcNamesRef.current,
+            npcPrayers: npcPrayersRef.current,
+            npcAvatars: npcAvatarsRef.current,
+            customAssets: customAssetsRef.current,
+            donors: donorsRef.current,
+            pilgrims: pilgrimsRef.current,
+            monks: monksRef.current,
+          });
+          syncService.sendCommand('UPDATE_HUD_LAYOUT', configRef.current.hudLayout);
+        }, 180);
+      }
     });
     const unsubPeers = syncService.onPeerCountChange((counts) => {
       setPeerCounts(counts);
@@ -3659,51 +3693,101 @@ export function useTempleEngine() {
     [rebuildAllSlots]
   );
 
+  const hudSyncThrottleRef = useRef<{
+    lastSentAt: number;
+    flushTimer: ReturnType<typeof setTimeout> | null;
+  }>({ lastSentAt: 0, flushTimer: null });
+
   const handleUpdateZoneBounds = useCallback(
     (zoneKey: ZoneKey, nextBounds: RectBounds) => {
-      setConfig((prev) => {
-        if (zoneKey === 'monk') {
-          syncService.sendCommand('UPDATE_ZONES', { monkZone: nextBounds });
-          return { ...prev, monkZone: nextBounds };
-        }
-        const nextRedZones = {
-          left: zoneKey === 'leftPray' ? nextBounds : prev.redPrayZones.left,
-          right: zoneKey === 'rightPray' ? nextBounds : prev.redPrayZones.right,
-        };
-        rebuildAllSlots(prev.grid, nextRedZones);
-        syncService.sendCommand('UPDATE_ZONES', { redPrayZones: nextRedZones });
-        return {
-          ...prev,
-          redPrayZones: nextRedZones,
-        };
-      });
+      if (zoneKey === 'monk') {
+        const nextCfg = { ...configRef.current, monkZone: nextBounds };
+        configRef.current = nextCfg;
+        setConfig(nextCfg);
+        syncService.sendCommand('UPDATE_ZONES', { monkZone: nextBounds });
+        return;
+      }
+      const nextRedZones = {
+        left: zoneKey === 'leftPray' ? nextBounds : configRef.current.redPrayZones.left,
+        right: zoneKey === 'rightPray' ? nextBounds : configRef.current.redPrayZones.right,
+      };
+      rebuildAllSlots(configRef.current.grid, nextRedZones);
+      const nextCfg = {
+        ...configRef.current,
+        redPrayZones: nextRedZones,
+      };
+      configRef.current = nextCfg;
+      setConfig(nextCfg);
+      syncService.sendCommand('UPDATE_ZONES', { redPrayZones: nextRedZones });
     },
     [rebuildAllSlots]
   );
 
   const handleUpdateHudLayout = useCallback((patch: Partial<HudLayoutConfig>) => {
-    setConfig((prev) => {
-      const nextHud = { ...prev.hudLayout, ...patch };
-      syncService.sendCommand('UPDATE_HUD_LAYOUT', patch);
-      return { ...prev, hudLayout: nextHud };
-    });
+    const nextHud = { ...configRef.current.hudLayout, ...patch };
+    const nextCfg = { ...configRef.current, hudLayout: nextHud };
+    configRef.current = nextCfg;
+    setConfig(nextCfg);
+    syncService.sendCommand('UPDATE_HUD_LAYOUT', patch);
   }, []);
 
   const handleUpdateHudBox = useCallback(
     (boxKey: HudBoxKey, nextBox: HudBoxPosition) => {
-      setConfig((prev) => {
+      const nextHud = {
+        ...configRef.current.hudLayout,
+        [boxKey]: nextBox,
+      };
+      const nextCfg = {
+        ...configRef.current,
+        hudLayout: nextHud,
+      };
+      configRef.current = nextCfg;
+      setConfig(nextCfg);
+
+      const now = Date.now();
+      if (now - hudSyncThrottleRef.current.lastSentAt >= 35) {
+        hudSyncThrottleRef.current.lastSentAt = now;
         syncService.sendCommand('UPDATE_HUD_LAYOUT', { [boxKey]: nextBox });
-        return {
-          ...prev,
-          hudLayout: {
-            ...prev.hudLayout,
-            [boxKey]: nextBox,
-          },
-        };
-      });
+      }
+      if (hudSyncThrottleRef.current.flushTimer) {
+        clearTimeout(hudSyncThrottleRef.current.flushTimer);
+      }
+      hudSyncThrottleRef.current.flushTimer = setTimeout(() => {
+        hudSyncThrottleRef.current.lastSentAt = Date.now();
+        syncService.sendCommand('UPDATE_HUD_LAYOUT', configRef.current.hudLayout);
+      }, 75);
     },
     []
   );
+
+  const handlePushFullSyncToLive = useCallback(() => {
+    syncService.sendCommand('UPDATE_HUD_LAYOUT', configRef.current.hudLayout);
+    syncService.sendCommand('RESTORE_BACKUP', {
+      config: configRef.current,
+      vipSlots: vipSlotsRef.current.map((s) => ({
+        id: s.id,
+        x: s.x,
+        y: s.y,
+        side: s.side,
+      })),
+      normalSlots: normalSlotsRef.current.map((s) => ({
+        id: s.id,
+        x: s.x,
+        y: s.y,
+        side: s.side,
+        row: s.row,
+        col: s.col,
+      })),
+      npcNames: npcNamesRef.current,
+      npcPrayers: npcPrayersRef.current,
+      npcAvatars: npcAvatarsRef.current,
+      customAssets: customAssetsRef.current,
+      donors: donorsRef.current,
+      pilgrims: pilgrimsRef.current,
+      monks: monksRef.current,
+    });
+    pushFloatingToast('📡 Đã đồng bộ toàn bộ vị trí bảng & cấu hình sang màn hình Live!', true);
+  }, [pushFloatingToast]);
 
   const handleMoveWaypoint = useCallback(
     (kind: 'burner' | 'tray' | 'vip' | 'normal', index: number, pos: Point2D) => {
@@ -4599,6 +4683,7 @@ export function useTempleEngine() {
     handleClearCameraQueue,
     handleRemoveCameraQueueItem,
     handleFocusPilgrimNow,
+    handlePushFullSyncToLive,
   };
 }
 
